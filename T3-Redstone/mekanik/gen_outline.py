@@ -18,7 +18,7 @@ HOLE_D  = 2.75                      # M2.5 icin
 HOLES   = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]
 
 # Kamera/DSI FPC kesiti - alt kenara acik. DOGRULA (bkz. kicad/gen_kicad.py)
-CUT_X1, CUT_X2, CUT_DEPTH = 42.0, 60.0, 14.0
+CUT_X1, CUT_X2, CUT_DEPTH = 40.0, 57.0, 14.0
 
 # 40-pin header: Gemstone'un Fritzing dosyasindan olculen konum.
 # DOGRULA - el yapimi bir Fritzing parcasindan geliyor, resmi RPi HAT

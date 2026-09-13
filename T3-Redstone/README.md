@@ -80,14 +80,50 @@ yapar. Ayrıntı: [docs/03-guc-mimarisi.md](docs/03-guc-mimarisi.md)
 
 | Yol | İçerik | Durum |
 |---|---|---|
-| `kicad/t3-redstone.kicad_pcb` | Açılabilir KiCad 8 board: kontur, 4 montaj deliği, 2×20 header, Gemstone referans konturu, USB/RJ45 yasak bölgesi | **Hazır — KiCad'de aç** |
+| `kicad/t3-redstone.kicad_pcb` | **Yerleşimi yapılmış KiCad 8 board** — 69 komponent, 84 net, 4 katman, kırmızı maske, ENIG, güç düzlemleri, güç yolları, ipek baskı | **Hazır — KiCad'de aç** |
+| `kicad/rs_lib.py` · `rs_design.py` · `rs_emit.py` · `rs_render.py` | Board üreteci: footprint kütüphanesi, devre+kat planı, emitter, DRC+önizleme. Bir koordinatı değiştir, `python3 rs_emit.py` çalıştır | Hazır |
+| `mekanik/t3-redstone-preview.svg` | Kartın görsel önizlemesi | Hazır |
+| `docs/04-netlist.md` | 84 netin tam bağlantı listesi + doğrulanacak pinoutlar | Hazır |
 | `mekanik/t3-redstone-outline.dxf` | Kontur + delikler (her CAD'e girer) | Hazır |
 | `docs/01-gemstone-o1-analiz.md` | Gemstone O1 tam donanım analizi, 40-pin tablosu, EQEP, PWM tuzağı | Hazır |
 | `docs/02-pin-plani.md` | Host + ESP32 pin atamaları, I2C adres haritası | Hazır |
 | `docs/03-guc-mimarisi.md` | Güç topolojisi ve kuralları | Hazır |
 | `bom/bom.csv` | Parça listesi, MPN'li | Taslak |
-| Şema | — | **Yapılacak** |
-| Yerleşim + routing | — | **Yapılacak** |
+| Şema (`.kicad_sch`) | — | **Yapılacak** — `docs/04-netlist.md`'den yakala |
+| Sinyal routing | — | **Yapılacak** — güç ve GND bitti, sinyaller elde |
+
+## Kartın durumu
+
+**Bitmiş olanlar**
+- 69 komponent yerleştirildi, çakışma kontrolünden temiz geçti
+- 4 katman: `F.Cu` sinyal · `In1.Cu` tam GND düzlemi · `In2.Cu` bölünmüş güç düzlemi · `B.Cu` sinyal + GND
+- `In2.Cu` güç düzlemleri çakışmasız bölündü: VSYS / +3V3 / +5V / VBAT_SW
+- Güç zinciri yolları çizildi ve kendi DRC'mden temiz geçti
+- Yüksek akımlı düğümler (Q1, Q2 çevresi) yol yerine yerel bakır alanla çözüldü
+- 33 GND dikiş viası
+- İpek baskı: blok etiketleri, uyarılar, pin 1 işareti
+- **Kırmızı lehim maskesi + ENIG** stackup'ta tanımlı
+
+**Kalan iş**
+- Şema yakalama (netlist hazır)
+- Sinyal yollarının çizimi (güç bitti)
+- KiCad'in kendi DRC'si — benim kontrolüm yol/pad ve yerleşim çakışmasına bakıyor,
+  KiCad'inki üretim kurallarına da bakar
+
+## Güç topolojisi
+
+```
+XT60 -> F1 sigorta -> Q1 ters polarite -> RS1 shunt -> VSYS
+                                                        |
+                        +-------------------------------+
+                        |            |                  |
+                    J3 klemens    U7 5V BEC        Q2 ACIL STOP
+                    (Gemstone)    (servo rayi)          |
+                                                    VBAT_SW -> DRV8874 x2
+```
+
+Q2 arızada **kapalıdır**: gate VSYS'e pull-up'lı, açmak için ESP32'nin
+Q3'ü sürmesi gerekir. ESP32 ölürse motorlar durur.
 
 ## Çizim sırası
 
