@@ -49,12 +49,23 @@ form faktörü**:
 
 | | Gemstone O1 | Redstone |
 |---|---|---|
-| Boyut | 85.0 × 56.0 mm | **65.0 × 56.5 mm** (RPi HAT standardı) |
+| Boyut | 85.0 × 56.0 mm | **85.0 × 56.0 mm** (tam boy) |
 | Köşe | 3.0 mm | 3.0 mm |
 | Delikler | 58 × 49 mm, sol kenardan 3.5 mm | aynı |
+| Header | 2×20 erkek | **2×20 dişi soket, yüksek** |
 
-> Redstone 85 mm olamaz: x=65..85 aralığında Gemstone'un USB-A yığını ve RJ45'i
-> var (~13.5 mm yükseklik). Standart HAT genişliği bu yüzden 65 mm.
+### Kamera / DSI kesiti
+Alt kenara açık bir U kesit: FPC kablosu dışarı çıkar, mandala parmak girer,
+frezelemesi kolaydır. Varsayılan `X 42→60 mm, derinlik 14 mm`.
+**Bu değerler fotoğraftan tahmin edildi — J4 (CSI) ve J12 (CSI/DSI)
+konnektörlerini kumpasla ölç**, `kicad/gen_kicad.py` içindeki `CUT_*`
+sabitlerini güncelle ve betiği tekrar çalıştır.
+
+### Yüksek header zorunlu
+Tam boy shield, Gemstone'un **USB-A yığını ve RJ45'inin üzerinden geçer**
+(~13.5 mm). Bu yüzden 2×20 dişi soket **en az 16 mm geçiş yüksekliğinde**
+olmalı ve standoff'lar da aynı boyda seçilmeli. Shield'in ALT yüzeyine
+komponent konulmaz.
 
 ## Güç — 2S LiPo, kartta buck yok
 

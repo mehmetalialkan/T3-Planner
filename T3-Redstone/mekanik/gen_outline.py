@@ -17,6 +17,9 @@ W, H, R = 85.0, 56.0, 3.0
 HOLE_D  = 2.75                      # M2.5 icin
 HOLES   = [(3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)]
 
+# Kamera/DSI FPC kesiti - alt kenara acik. DOGRULA (bkz. kicad/gen_kicad.py)
+CUT_X1, CUT_X2, CUT_DEPTH = 42.0, 60.0, 14.0
+
 # 40-pin header: Gemstone'un Fritzing dosyasindan olculen konum.
 # DOGRULA - el yapimi bir Fritzing parcasindan geliyor, resmi RPi HAT
 # sablonuyla veya kumpasla teyit et. Referans katmanina yaziliyor.
@@ -32,7 +35,11 @@ def circle(cx, cy, r, layer):
     ent.append(f"0\nCIRCLE\n8\n{layer}\n10\n{cx:.4f}\n20\n{cy:.4f}\n40\n{r:.4f}\n")
 
 E = "Edge_Cuts"
-line(R, 0, W - R, 0, E)             # alt
+line(R, 0, CUT_X1, 0, E)            # alt kenar, kesitin solu
+line(CUT_X2, 0, W - R, 0, E)        # alt kenar, kesitin sagi
+line(CUT_X1, 0, CUT_X1, CUT_DEPTH, E)          # kesit sol duvar
+line(CUT_X1, CUT_DEPTH, CUT_X2, CUT_DEPTH, E)  # kesit tavani
+line(CUT_X2, CUT_DEPTH, CUT_X2, 0, E)          # kesit sag duvar
 line(W, R, W, H - R, E)             # sag
 line(W - R, H, R, H, E)             # ust
 line(0, H - R, 0, R, E)             # sol

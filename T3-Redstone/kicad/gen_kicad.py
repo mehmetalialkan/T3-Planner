@@ -4,8 +4,22 @@ import uuid as _u
 def U(): return str(_u.uuid4())
 
 # --- Mekanik (Gemstone O1'in kendi Fritzing dosyasindan olculdu) -------------
-HAT_W, HAT_H, HAT_R = 65.0, 56.5, 3.0      # Raspberry Pi HAT standardi
-GEM_W, GEM_H        = 85.0, 56.0           # Gemstone O1 konturu (referans)
+HAT_W, HAT_H, HAT_R = 85.0, 56.0, 3.0      # TAM BOY - Gemstone ile ayni
+GEM_W, GEM_H        = 85.0, 56.0           # Gemstone O1 konturu (ayni)
+
+# Kamera/DSI FPC konnektorleri icin alt kenardan acik kesit.
+# !!! DOGRULA: bu degerler fotograftan tahmin edildi. Gemstone'un alt kenari ile
+# J4 (CSI) ve J12 (CSI/DSI) konnektorleri arasini kumpasla olc, asagidaki dort
+# sayiyi guncelle, betigi tekrar calistir. Kesit alt kenara acik birakildi:
+# hem FPC kablosu disari cikar hem mandala parmak girer hem de frezelemesi kolay.
+CUT_X1, CUT_X2 = 42.0, 60.0                # kesitin X araligi (sol kenardan)
+CUT_DEPTH      = 14.0                      # alt kenardan yukari derinlik
+CUT_R          = 1.5                       # ic kose yaricapi (freze ucu >= 2mm)
+
+# Gemstone'un yuksek konnektorleri - shield bunlarin UZERINDEN gecer.
+# Bu yuzden YUKSEK disi header sart (>=16mm gecis yuksekligi).
+TALL = [("USB-A x3 yigini", 68.0, 20.0, 85.0, 52.0),
+        ("RJ45 Gigabit",    60.0,  0.0, 85.0, 18.0)]
 HOLES  = [(3.5,3.5),(61.5,3.5),(3.5,52.5),(61.5,52.5)]
 PIN1   = (8.366, 51.641)                   # pin1 merkezi, HAT sol-alttan
 PITCH  = 2.54
@@ -63,14 +77,26 @@ gr_line(HAT_W-HAT_R,HAT_H,HAT_R,HAT_H,E); gr_line(0,HAT_H-HAT_R,0,HAT_R,E)
 gr_arc(HAT_W-HAT_R,HAT_R,HAT_R,270,360,E); gr_arc(HAT_W-HAT_R,HAT_H-HAT_R,HAT_R,0,90,E)
 gr_arc(HAT_R,HAT_H-HAT_R,HAT_R,90,180,E);  gr_arc(HAT_R,HAT_R,HAT_R,180,270,E)
 
+# --- Kamera/DSI kesiti: alt kenara acik U ----------------------------------
+# Alt kenar cizgisini kesit kadar bolmek icin yukaridaki alt cizgiyi sil ve
+# iki parcaya ayir.
+out[:] = [l for l in out if not (l.startswith('  (gr_line') and
+          f'(start {X(HAT_R):.4f} {Y(0):.4f}) (end {X(HAT_W-HAT_R):.4f} {Y(0):.4f})' in l)]
+gr_line(HAT_R,0,CUT_X1,0,E)                 # alt kenar, kesitin solu
+gr_line(CUT_X2,0,HAT_W-HAT_R,0,E)           # alt kenar, kesitin sagi
+gr_line(CUT_X1,0,CUT_X1,CUT_DEPTH-CUT_R,E)  # kesit sol duvar
+gr_line(CUT_X2,CUT_DEPTH-CUT_R,CUT_X2,0,E)  # kesit sag duvar
+gr_line(CUT_X1+CUT_R,CUT_DEPTH,CUT_X2-CUT_R,CUT_DEPTH,E)   # kesit tavani
+gr_arc(CUT_X1+CUT_R,CUT_DEPTH-CUT_R,CUT_R,180,90,E)
+gr_arc(CUT_X2-CUT_R,CUT_DEPTH-CUT_R,CUT_R,90,0,E)
+
 # --- Dwgs.User: altta duran Gemstone O1 konturu (referans) ------------------
 D="Dwgs.User"
-gr_line(0,0,GEM_W,0,D,0.15); gr_line(GEM_W,0,GEM_W,GEM_H,D,0.15)
-gr_line(GEM_W,GEM_H,0,GEM_H,D,0.15); gr_line(0,GEM_H,0,0,D,0.15)
-gr_text("GEMSTONE O1 KONTURU 85x56 (referans)",34,-3.5,D,1.2)
-# USB-A / RJ45 yukseklik cakismasi bolgesi
-gr_line(65,0,85,0,D,0.3); gr_line(85,0,85,56,D,0.3); gr_line(85,56,65,56,D,0.3); gr_line(65,56,65,0,D,0.3)
-gr_text("USB-A + RJ45 BOLGESI - shield buraya UZANMAMALI (h~13.5mm)",75,28,D,1.0)
+gr_text("SHIELD = GEMSTONE O1 TAM BOY 85x56",30,-3.0,D,1.2)
+for nm,x1,y1,x2,y2 in TALL:
+    gr_line(x1,y1,x2,y1,D,0.3); gr_line(x2,y1,x2,y2,D,0.3)
+    gr_line(x2,y2,x1,y2,D,0.3); gr_line(x1,y2,x1,y1,D,0.3)
+    gr_text(f"{nm} - h~13.5mm - YUKSEK HEADER SART",(x1+x2)/2,(y1+y2)/2,D,1.0)
 
 # --- Montaj delikleri (NPTH) -----------------------------------------------
 for i,(hx,hy) in enumerate(HOLES,1):
@@ -86,11 +112,11 @@ for i,(hx,hy) in enumerate(HOLES,1):
     w('  )')
 
 # --- 2x20 header ------------------------------------------------------------
-w(f'  (footprint "Connector_PinHeader_2.54mm:PinHeader_2x20_P2.54mm_Vertical" (layer "F.Cu") (uuid "{U()}") '
+w(f'  (footprint "Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical" (layer "F.Cu") (uuid "{U()}") '
   f'(at {X(PIN1[0]):.4f} {Y(PIN1[1]):.4f})')
 w(f'    (property "Reference" "J1" (at 0 -3 0) (layer "F.SilkS") (uuid "{U()}") '
   f'(effects (font (size 1 1) (thickness 0.15))))')
-w(f'    (property "Value" "GEMSTONE_40PIN" (at 24 5 0) (layer "F.Fab") (uuid "{U()}") '
+w(f'    (property "Value" "GEMSTONE_40PIN_DISI_YUKSEK" (at 24 5 0) (layer "F.Fab") (uuid "{U()}") '
   f'(effects (font (size 1 1) (thickness 0.15))))')
 for i in range(20):
     px = i*PITCH
@@ -108,6 +134,7 @@ S="F.SilkS"
 gr_text("T3-REDSTONE",4,46,S,2.5,0.4)
 gr_text("ROS2 Robot Kontrol Karti / Gemstone O1",4,42,S,1.2)
 gr_text("2S LiPo ONLY (6.0-8.4V)",4,39,S,1.2)
+gr_text("KAMERA / DSI ERISIMI",CUT_X1+1,CUT_DEPTH+2.5,S,1.2)
 w(')')
 open("t3-redstone.kicad_pcb","w").write("\n".join(out)+"\n")
 
