@@ -1,0 +1,26 @@
+Ref,Parca,Deger/MPN,Paket,Adet,Islev,Not
+U1,MCU modul,ESP32-S3-WROOM-1-N8R2,SMD modul,1,Ana denetleyici,N8R8 ALMA - GPIO33-37 kaybolur
+U2;U3,Motor surucu,DRV8874PWPR,HTSSOP-16 PowerPAD,2,DC motor H-kopru 37V,IPROPI akim cikisi var
+U4,PWM genisletici,PCA9685PW,TSSOP-28,1,16 kanal servo PWM,I2C 0x40
+U5,Guc olcer,INA226AIDGSR,VSSOP-10,1,Batarya V+I,I2C 0x45 - A0=VS
+U6,LDO,AP2112K-3.3TRG1,SOT-23-5,1,3V3 / 600mA,ESP32 icin
+U7,BEC 5V,TPS563201 veya modul,SOT-23-6,1,Servo rayi 5V/3A,SBC ile paylasilmaz
+U8,Tampon,74LVC245APW,TSSOP-20,1,5V enkoder -> 3V3,yon sabit
+Q1,P-MOSFET,SI7137DP veya AON7403,SO-8,1,Ters polarite korumasi,ideal diyot
+K1,Role,G5LE-1A-DC5 veya MOSFET,THT,1,Acil stop - motor gucu kesici,
+F1,Sigorta,20A otomotiv / PTC,THT,1,Giris korumasi,
+J1,Header,2x20 2.54mm disi,THT,1,Gemstone 40-pin,yukseklik: stacking gerekebilir
+J2,Guc girisi,XT60 disi,THT,1,2S LiPo,
+J3,Guc passthrough,2 pin klemens 5.08mm,THT,1,Gemstone klemensine pigtail,18AWG
+J4;J5,Motor cikisi,2 pin klemens 5.08mm,THT,2,Motor A / B,
+J6;J7,Enkoder girisi,JST-XH 4 pin,THT,2,5V/GND/A/B,
+J8,Servo header,3x16 2.54mm,THT,1,Servo sinyal/5V/GND,
+J9,Yardimci guc,JST-XH 2 pin,THT,1,5V/2A - RPLIDAR,
+J10,Qwiic,JST-SH 4 pin,SMD,1,I2C genisletme,
+J11,USB-C,USB4085 veya benzeri,SMD,1,ESP32 flaslama,5.1k CC direncleri
+J12,OLED,4 pin 2.54mm,THT,1,SSD1306 0.96",I2C
+SW1,Buton,acil stop mantar buton,harici,1,E-STOP,NC kontak
+SW2;SW3,Buton,6x6 tact,SMD,2,BOOT / RESET,
+DS1-DS4,LED,WS2812B,5050,4,Durum gostergesi,
+LS1,Buzzer,magnetik 5V,THT,1,Uyari,MOSFET ile surulur
+R_shunt,Shunt,2mOhm 2W,2512,1,INA226 akim olcumu,
