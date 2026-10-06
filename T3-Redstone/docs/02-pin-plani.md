@@ -48,15 +48,18 @@ Modül: **ESP32-S3-WROOM-1-N8R2**
 | Enkoder B — kanal A / B | 10 / 11 | PCNT birimi 1 |
 | I2C SDA / SCL | 41 / 42 | 4.7k pull-up |
 | Host UART TX / RX | 47 / 48 | 921600 baud |
-| WS2812 durum LED | 40 | 4 adet zincir |
-| Acil stop butonu | 18 | giriş, pull-up |
-| Acil stop röle sürücü | 21 | çıkış |
+| SK6812MINI durum LED | 40 | 4 adet zincir, 74AHCT1G125 ile 5 V'a çevrilir |
+| Acil stop döngüsü (ESTOP_LOOP) | 18 | giriş; 0 = buton kapalı (normal), 1 = basılı / kablo kopuk |
+| Acil stop sürücü (ESTOP_DRV) | 21 | çıkış; 1 = motor gücünü aç. 100 k pull-down: reset'te kapalı |
+| Acil stop durumu → host (ESTOP_STAT) | 12 | çıkış → 40-pin pin 13 |
+| INA226 ALERT (PWR_ALERT) | 14 | giriş, 10 k pull-up |
 | Bumper 1 / 2 | 38 / 39 | giriş, pull-up |
-| Genel amaçlı header | 12, 13, 14, 17 | takıma açık |
-| Debug konsol UART0 | 43 / 44 | USB-C ile paylaşımlı |
+| Genel amaçlı header (J14) | 13, 17 | 3V3 / IO13 / IO17 / GND |
+| Debug konsol | USB-C | ESP32-S3 dahili USB-Serial/JTAG (UART0 pinleri bağlı değil) |
 | BOOT butonu | 0 | strapping |
 | USB D− / D+ | 19 / 20 | USB-C, flaşlama |
-| **KULLANMA** | 26–37 | dahili flash/PSRAM |
+| **KULLANMA** | 26–37 | dahili flash/PSRAM (modülde IO35–37 dışarı çıkar, bağlı değil) |
+| Bağlı değil (strap) | 3, 45, 46 | boot strap pinleri, boş bırakıldı |
 
 ## 3. I2C adres haritası (ESP32 veri yolu)
 
@@ -64,9 +67,9 @@ Modül: **ESP32-S3-WROOM-1-N8R2**
 |---|---|---|
 | PCA9685 | 0x40 | 16 kanal servo PWM |
 | INA226 | 0x45 | batarya gerilim + akım |
-| SSD1306 OLED | 0x3C | IP / batarya / mod göstergesi |
-| VL53L0X | 0x29 | opsiyonel ToF |
+| SSD1306 OLED | 0x3C | Qwiic (J10) üzerinden, opsiyonel |
+| VL53L0X | 0x29 | Qwiic üzerinden, opsiyonel ToF |
 | Qwiic | boş | takım genişletmesi |
 
-> PCA9685 ve INA226'nın ikisi de fabrika çıkışı 0x40'tır. INA226'nın A0
-> pinini VS'e çekerek 0x45'e al, yoksa veri yolu çakışır.
+> PCA9685 ve INA226'nın ikisi de varsayılan olarak 0x40'tır. INA226'da **A0 ve A1'in
+> ikisi de VS'e** bağlıdır → 0x45 (yalnız A0=VS olsaydı 0x41 olurdu).

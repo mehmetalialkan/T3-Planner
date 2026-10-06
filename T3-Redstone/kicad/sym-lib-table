@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "T3RS")(type "KiCad")(uri "${KIPRJMOD}/T3RS.kicad_sym")(options "")(descr "T3-Redstone projeye ozel semboller"))
+)

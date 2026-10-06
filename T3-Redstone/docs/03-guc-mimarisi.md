@@ -15,29 +15,42 @@ Bu çelişki çözülene kadar **3S (9.0–12.6 V) bağlanmaz.**
 ## 2. Topoloji
 
 ```
-        ┌──────────────── Redstone ────────────────┐
-XT60 ───┤ F1 sigorta ── Q1 ters polarite (ideal    │
- 2S     │               diyot P-MOSFET)            │
-LiPo    │        │                                 │
-        │        ├── PASSTHROUGH ──────────────────┼──> Gemstone yeşil klemens (+/-)
-        │        │   (her zaman açık, 5A)          │     pigtail, 18AWG
-        │        │                                 │
-        │        ├── INA226 shunt ── K1 ACIL STOP ─┼──> DRV8874 x2 (motorlar)
-        │        │                     rölesi      │
-        │        │                                 │
-        │        ├── 5V BEC (3A) ─────────────────┼──> servo rayı (PCA9685 çıkışları)
-        │        │                                 │
-        │        └── AP2112K 3V3 ─────────────────┼──> ESP32-S3, mantık
-        └──────────────────────────────────────────┘
+XT60 ── F1 20A ── Q1 AO4407A ── RS1 2mΩ ──┬── VSYS ──────────────────────> J3: Gemstone DC girişi
+ 2S      sigorta   ters polarite  (INA226)  │          (her zaman açık)
+LiPo               P-FET                    │
+                                            ├── U7 TPS563201 ── +5V 3A ──┬─> servo rayı (J8A/J8B)
+                                            │   (BEC)                    ├─> enkoder 5V, LED'ler
+                                            │                            └─> U6 AP2112K ── +3V3 ──> ESP32, mantık
+                                            │
+                                            └── Q2 AO4407A (ACİL STOP) ── VBAT_SW ──> DRV8874 x2 (motorlar)
+                                                 varsayılan KAPALI
+USB-C 5V ── D1 B5819W ──> +5V   (yalnızca flaşlama; batarya yokken servoları USB'den besleme)
 ```
+
+### Acil stop zinciri (donanım, yazılımdan bağımsız)
+
+```
+VSYS ── R6 100k ──┬── Q2 gate              Q2 KAPALI  ⇐  gate = VSYS
+                  │
+              Q3 drain                     Q2 AÇIK    ⇐  Q3 iletimde
+              Q3 source ── J12 (NC buton) ── GND
+              Q3 gate  ── ESTOP_DRV (ESP32 IO21) + R16 100k → GND
+```
+
+Motorlar ancak **ESP32 ESTOP_DRV=1 verdiğinde VE J12'deki NC buton kapalıyken** güç alır.
+ESP32 reset atar/ölürse (R16), butona basılırsa ya da kablo koparsa motor gücü kesilir.
+Buton kullanılmayacaksa J12'ye köprü takılmalı.
 
 ## 3. Kurallar
 
 1. **Yıldız noktası sigortanın hemen ardında.** Motor akımı SBC'nin besleme
    hattından geçmeyecek — geçerse stall anında gerilim sarkması karta yansır.
 2. **Acil stop yalnızca motor kolunda.** SBC'nin gücü asla kesilmez; kesilirse
-   her acil durdurma Linux'u çökertir ve eMMC'yi riske atar.
+   her acil durdurma Linux'u çökertir ve eMMC'yi riske atar. Servo rayı (BEC) da
+   kesilmez — servolar acil stop'ta PCA9685 üzerinden yazılımla bırakılır.
 3. **Servo rayı SBC ile paylaşılmaz.** Servo akım darbesi ayrı BEC'te kalır.
+   BEC 3 A'dir: 16 servonun hepsi aynı anda yük altındaysa yetmez — büyük servolar
+   için harici BEC ile servo rayını ayrı besle.
 4. **Ters polarite koruması zorunlu.** Takımlar bataryayı ters takar; 3
    komponent karşılığında kartın en yüksek değerli bloğu.
 5. **Düşük gerilim uyarısı.** INA226 6.4 V altını görünce ESP32 buzzer'ı öttürür
@@ -53,3 +66,15 @@ Ham 2S gerilimini doğrudan yiyor. 5 V üretmek:
 - Kartın alt sınırına (5 V) sıfır pay bırakır.
 
 5 V veren batarya kimyası yoktur. **Batarya ne veriyorsa onu klemense ver.**
+
+## 5. Kart üzerindeki dağıtım
+
+| Katman | Görev |
+|---|---|
+| F.Cu | sinyal + yüksek akım dökümleri (XT60 → F1 → Q1 → RS1, Q2, motor çıkışları) |
+| In1.Cu | kesintisiz GND düzlemi |
+| In2.Cu | bölünmüş güç: VSYS (sol-alt), +5V (orta / sağ-üst), +3V3 (ESP32 bölgesi), VBAT_SW (motor bölgesi) |
+| B.Cu | sinyal + GND dolgu; VSYS'i sağa taşıyan 2 mm gövde (y = 21.4 mm) |
+
+INA226 shunt'a **Kelvin** bağlıdır: IN+ RS1'in batarya tarafındaki pedin dibinden,
+IN−/VBUS çıkış tarafındaki pedden ayrı ince yollarla alınır.

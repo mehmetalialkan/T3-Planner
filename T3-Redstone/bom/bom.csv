@@ -1,26 +1,51 @@
-Ref,Parca,Deger/MPN,Paket,Adet,Islev,Not
-U1,MCU modul,ESP32-S3-WROOM-1-N8R2,SMD modul,1,Ana denetleyici,N8R8 ALMA - GPIO33-37 kaybolur
-U2;U3,Motor surucu,DRV8874PWPR,HTSSOP-16 PowerPAD,2,DC motor H-kopru 37V,IPROPI akim cikisi var
-U4,PWM genisletici,PCA9685PW,TSSOP-28,1,16 kanal servo PWM,I2C 0x40
-U5,Guc olcer,INA226AIDGSR,VSSOP-10,1,Batarya V+I,I2C 0x45 - A0=VS
-U6,LDO,AP2112K-3.3TRG1,SOT-23-5,1,3V3 / 600mA,ESP32 icin
-U7,BEC 5V,TPS563201 veya modul,SOT-23-6,1,Servo rayi 5V/3A,SBC ile paylasilmaz
-U8,Tampon,74LVC245APW,TSSOP-20,1,5V enkoder -> 3V3,yon sabit
-Q1,P-MOSFET,SI7137DP veya AON7403,SO-8,1,Ters polarite korumasi,ideal diyot
-K1,Role,G5LE-1A-DC5 veya MOSFET,THT,1,Acil stop - motor gucu kesici,
-F1,Sigorta,20A otomotiv / PTC,THT,1,Giris korumasi,
-J1,Header,2x20 2.54mm disi,THT,1,Gemstone 40-pin,yukseklik: stacking gerekebilir
-J2,Guc girisi,XT60 disi,THT,1,2S LiPo,
-J3,Guc passthrough,2 pin klemens 5.08mm,THT,1,Gemstone klemensine pigtail,18AWG
-J4;J5,Motor cikisi,2 pin klemens 5.08mm,THT,2,Motor A / B,
-J6;J7,Enkoder girisi,JST-XH 4 pin,THT,2,5V/GND/A/B,
-J8,Servo header,3x16 2.54mm,THT,1,Servo sinyal/5V/GND,
-J9,Yardimci guc,JST-XH 2 pin,THT,1,5V/2A - RPLIDAR,
-J10,Qwiic,JST-SH 4 pin,SMD,1,I2C genisletme,
-J11,USB-C,USB4085 veya benzeri,SMD,1,ESP32 flaslama,5.1k CC direncleri
-J12,OLED,4 pin 2.54mm,THT,1,SSD1306 0.96",I2C
-SW1,Buton,acil stop mantar buton,harici,1,E-STOP,NC kontak
-SW2;SW3,Buton,6x6 tact,SMD,2,BOOT / RESET,
-DS1-DS4,LED,WS2812B,5050,4,Durum gostergesi,
-LS1,Buzzer,magnetik 5V,THT,1,Uyari,MOSFET ile surulur
-R_shunt,Shunt,2mOhm 2W,2512,1,INA226 akim olcumu,
+Ref,Adet,Deger,MPN,Footprint,Not,Yuz
+C1 C2,2,10u,,C_0805_2012Metric,,F (ust)
+C3 C6 C15,3,22u,,C_0805_2012Metric,,F (ust)
+C4 C5 C11 C12 C13 C17 C18 C19 C20 C21,10,100n,,C_0603_1608Metric,,F (ust)
+C7,1,10u 25V,,C_0805_2012Metric,,F (ust)
+C8,1,100u 25V,EEE-FK1E101P,CP_Elec_6.3x7.7,motor bulk,F (ust)
+C9 C10,2,100n 50V,,C_0402_1005Metric,VM dekuplaj,F (ust)
+C14,1,1u,,C_0603_1608Metric,EN RC gecikmesi (zorunlu),F (ust)
+C16,1,100n 25V,,C_0603_1608Metric,,F (ust)
+C22 C23,2,100n 16V,,C_0402_1005Metric,VCP - VM,F (ust)
+C24 C25,2,22n 50V,,C_0402_1005Metric,CPH - CPL,F (ust)
+D1 D2,2,B5819W,B5819W,D_SOD-123,,F (ust)
+DS1 DS2 DS3 DS4,4,SK6812MINI,SK6812MINI,LED_SK6812MINI_PLCC4_3.5x3.5mm_P1.75mm,,F (ust)
+F1,1,20A,Bel Fuse 0685P/2512 20A,Fuse_2512_6332Metric,giris sigortasi,F (ust)
+J1,1,Gemstone 40P disi,"2x20 disi, >=16mm gecis (stacking)",PinSocket_2x20_P2.54mm_Vertical,"5V pinleri (2,4) BILEREK bos",B (alt)
+J2,1,XT60 2S LiPo,AMASS XT60-F,AMASS_XT60-F_1x02_P7.20mm_Vertical,6.0-8.4V; bataryanin karsiligi,F (ust)
+J3,1,GEMSTONE GUC,KF301-2P 5.08,TerminalBlock_bornier-2_P5.08mm,Gemstone DC girisine pigtail,F (ust)
+J4,1,MOTOR A,KF301-2P 5.08,TerminalBlock_bornier-2_P5.08mm,,F (ust)
+J5,1,MOTOR B,KF301-2P 5.08,TerminalBlock_bornier-2_P5.08mm,,F (ust)
+J6,1,ENKODER A,JST B4B-XH-A,JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical,,F (ust)
+J7,1,ENKODER B,JST B4B-XH-A,JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical,,F (ust)
+J8A,1,SERVO 1-8,3x8 erkek header 2.54,Servo_3x08_P2.54mm,,F (ust)
+J8B,1,SERVO 9-16,3x8 erkek header 2.54,Servo_3x08_P2.54mm,,F (ust)
+J10,1,QWIIC,JST SM04B-SRSS-TB,JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal,,F (ust)
+J11,1,USB-C,GCT USB4105-GF-A,USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,flaslama / konsol,F (ust)
+J12,1,ACIL STOP (NC),JST B2B-XH-A,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical,NC buton; buton yoksa kopru tak,F (ust)
+J13,1,BUMPER,JST B3B-XH-A,JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical,,F (ust)
+J14,1,GPIO,1x4 erkek 2.54,PinHeader_1x04_P2.54mm_Vertical,,F (ust)
+L1,1,3u3,SWPA5040S3R3MT,L_Sunlord_SWPA5040S,Isat >= 4A,F (ust)
+LS1,1,BUZZER 5V,JST B2B-XH-A,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical,harici manyetik buzzer,F (ust)
+Q1 Q2,2,AO4407A,AO4407A,SOIC-8_3.9x4.9mm_P1.27mm,,F (ust)
+Q3 Q4,2,AO3400A,AO3400A,SOT-23,,F (ust)
+R1 R2,2,5k1,,R_0603_1608Metric,,F (ust)
+R3 R4 R9 R13 R14 R15 R17,7,10k,,R_0603_1608Metric,,F (ust)
+R5 R6 R16,3,100k,,R_0603_1608Metric,,F (ust)
+R7 R8,2,1k5,,R_0603_1608Metric,IPROPI: 3.3V ~ 4.9A,F (ust)
+R10 R11,2,4k7,,R_0603_1608Metric,,F (ust)
+R12,1,56k,,R_0603_1608Metric,Vout = 0.768*(1+56/10) = 5.07V,F (ust)
+RN1,1,4x10k,CAY16-103J4LF,R_Array_Convex_4x0603,,F (ust)
+RS1,1,2m 2W,WSL2512R0020FEA,R_2512_6332Metric,akim shuntu,F (ust)
+SW1,1,BOOT,PTS810 SJM 250 SMTR LFS,SW_SPST_PTS810,,F (ust)
+SW2,1,RESET,PTS810 SJM 250 SMTR LFS,SW_SPST_PTS810,,F (ust)
+U1,1,ESP32-S3-WROOM-1U-N8R2,ESP32-S3-WROOM-1U-N8R2,ESP32-S3-WROOM-1U,N8R8 ALMA: IO35-37 kaybolur,F (ust)
+U2 U3,2,DRV8874,DRV8874PWPR,HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias,,F (ust)
+U4,1,PCA9685PW,PCA9685PW,TSSOP-28_4.4x9.7mm_P0.65mm,16 kanal servo PWM,F (ust)
+U5,1,INA226,INA226AIDGSR,VSSOP-10_3x3mm_P0.5mm,I2C 0x45 (A0=A1=VS),F (ust)
+U6,1,AP2112K-3.3,AP2112K-3.3TRG1,SOT-23-5,,F (ust)
+U7,1,TPS563201,TPS563201DDCR,SOT-23-6,5V/3A BEC,F (ust)
+U8,1,74LVC245,SN74LVC245APWR,TSSOP-20_4.4x6.5mm_P0.65mm,5V -> 3V3 tampon,F (ust)
+U9,1,74AHCT1G125,SN74AHCT1G125DBVR,SOT-23-5,3V3 -> 5V veri,F (ust)
+U10,1,USBLC6-2SC6,USBLC6-2SC6,SOT-23-6,USB ESD,F (ust)

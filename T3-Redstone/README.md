@@ -56,10 +56,10 @@ form faktörü**:
 
 ### Kamera / DSI kesiti
 Alt kenara açık bir U kesit: FPC kablosu dışarı çıkar, mandala parmak girer,
-frezelemesi kolaydır. Varsayılan `X 42→60 mm, derinlik 14 mm`.
-**Bu değerler fotoğraftan tahmin edildi — J4 (CSI) ve J12 (CSI/DSI)
-konnektörlerini kumpasla ölç**, `kicad/gen_kicad.py` içindeki `CUT_*`
-sabitlerini güncelle ve betiği tekrar çalıştır.
+frezelemesi kolaydır. Şu anki değer `X 40→57 mm, derinlik 14 mm`.
+**Bu değerler fotoğraftan tahmin edildi — Gemstone'un J4 (CSI) ve J12 (CSI/DSI)
+konnektörlerini kumpasla ölç**, `kicad/rs_design.py` içindeki `CUT` sözlüğünü
+güncelle ve `make` ile kartı yeniden üret.
 
 ### Yüksek header zorunlu
 Tam boy shield, Gemstone'un **USB-A yığını ve RJ45'inin üzerinden geçer**
@@ -78,68 +78,79 @@ yapar. Ayrıntı: [docs/03-guc-mimarisi.md](docs/03-guc-mimarisi.md)
 
 ## Dosyalar
 
-| Yol | İçerik | Durum |
-|---|---|---|
-| `kicad/t3-redstone.kicad_pcb` | **Yerleşimi yapılmış KiCad 8 board** — 69 komponent, 84 net, 4 katman, kırmızı maske, ENIG, güç düzlemleri, güç yolları, ipek baskı | **Hazır — KiCad'de aç** |
-| `kicad/rs_lib.py` · `rs_design.py` · `rs_emit.py` · `rs_render.py` | Board üreteci: footprint kütüphanesi, devre+kat planı, emitter, DRC+önizleme. Bir koordinatı değiştir, `python3 rs_emit.py` çalıştır | Hazır |
-| `mekanik/t3-redstone-preview.svg` | Kartın görsel önizlemesi | Hazır |
-| `docs/04-netlist.md` | 84 netin tam bağlantı listesi + doğrulanacak pinoutlar | Hazır |
-| `mekanik/t3-redstone-outline.dxf` | Kontur + delikler (her CAD'e girer) | Hazır |
-| `docs/01-gemstone-o1-analiz.md` | Gemstone O1 tam donanım analizi, 40-pin tablosu, EQEP, PWM tuzağı | Hazır |
-| `docs/02-pin-plani.md` | Host + ESP32 pin atamaları, I2C adres haritası | Hazır |
-| `docs/03-guc-mimarisi.md` | Güç topolojisi ve kuralları | Hazır |
-| `bom/bom.csv` | Parça listesi, MPN'li | Taslak |
-| Şema (`.kicad_sch`) | — | **Yapılacak** — `docs/04-netlist.md`'den yakala |
-| Sinyal routing | — | **Yapılacak** — güç ve GND bitti, sinyaller elde |
+| Yol | İçerik |
+|---|---|
+| `kicad/t3-redstone.kicad_pcb` | **Kart** — 4 katman, kırmızı maske, ENIG, yerleşim + güç + sinyal yolları + GND dolgu |
+| `kicad/t3-redstone.kicad_sch` | **Şema** — `rs_design.py`'den üretilir, netlist kartla pin pin aynı |
+| `kicad/rs_design.py` | **Tek kaynak**: parçalar, footprint'ler, pad → net, yerleşim, güç dağıtımı |
+| `kicad/rs_build.py` | Kartı KiCad'in `pcbnew` API'siyle kurar (resmi kütüphane footprint'leri) |
+| `kicad/rs_route.py` | Freerouting ile sinyal yönlendirme, GND dikiş viaları, dolgu, KiCad DRC |
+| `kicad/rs_sch.py` | Şemayı üretir; `--check` şemadan netlist çıkarıp tasarımla karşılaştırır |
+| `kicad/rs_bom.py` · `rs_docs.py` · `rs_render.py` | BOM, netlist belgesi, önizleme SVG |
+| `kicad/T3RS.pretty` · `T3RS.kicad_sym` | Projeye özel footprint (servo 3×8) ve semboller (DRV8874, servo) |
+| `mekanik/t3-redstone-preview.svg` | Kartın üstten görünümü (kicad-cli) |
+| `mekanik/t3-redstone-outline.dxf` | Kontur + delikler (her CAD'e girer) |
+| `bom/bom.csv` | Parça listesi, MPN'li — `rs_design.py`'den üretilir |
+| `docs/01-gemstone-o1-analiz.md` | Gemstone O1 donanım analizi, 40-pin tablosu, EQEP, PWM tuzağı |
+| `docs/02-pin-plani.md` | Host + ESP32 pin atamaları, I2C adres haritası |
+| `docs/03-guc-mimarisi.md` | Güç topolojisi, acil stop zinciri, katman dağılımı |
+| `docs/04-netlist.md` | Bütün netlerin bağlantı listesi + pinout doğrulama tablosu (üretilir) |
+| `docs/05-revB-degisiklikler.md` | **Rev A'da bulunan hatalar ve düzeltmeler** |
 
-## Kartın durumu
+### Yeniden üretmek
+
+```bash
+cd kicad
+make            # rs_build -> rs_route -> rs_sch --check -> BOM / netlist / önizleme
+```
+
+KiCad 7 (`pcbnew` Python modülüyle), Java 25+ ve Freerouting 2.4.1 gerekir
+(`FREEROUTING_JAR=...`, Maven Central: `app.freerouting:freerouting:2.4.1`, `-executable.jar`).
+Bir pin ya da koordinat değiştirmek için yalnızca `rs_design.py`'yi düzenle.
+Dosyalar KiCad 7 biçiminde üretilir; KiCad 8 / 9 açar.
+
+## Kartın durumu (rev B)
 
 **Bitmiş olanlar**
-- 69 komponent yerleştirildi, çakışma kontrolünden temiz geçti
-- 4 katman: `F.Cu` sinyal · `In1.Cu` tam GND düzlemi · `In2.Cu` bölünmüş güç düzlemi · `B.Cu` sinyal + GND
-- `In2.Cu` güç düzlemleri çakışmasız bölündü: VSYS / +3V3 / +5V / VBAT_SW
-- Güç zinciri yolları çizildi ve kendi DRC'mden temiz geçti
-- Yüksek akımlı düğümler (Q1, Q2 çevresi) yol yerine yerel bakır alanla çözüldü
-- 33 GND dikiş viası
-- İpek baskı: blok etiketleri, uyarılar, pin 1 işareti
-- **Kırmızı lehim maskesi + ENIG** stackup'ta tanımlı
+- Bütün entegre pinleri resmi kütüphaneyle / veri sayfasıyla karşılaştırıldı; rev A'daki
+  14 kritik hata düzeltildi — liste: [docs/05-revB-degisiklikler.md](docs/05-revB-degisiklikler.md)
+- 87 komponent (resmi KiCad footprint'leri), 83 net; yerleşim çakışmasız
+- 4 katman: `F.Cu` sinyal + güç dökümleri · `In1.Cu` kesintisiz GND · `In2.Cu` bölünmüş güç
+  (VSYS / +5V / +3V3 / VBAT_SW) · `B.Cu` sinyal + GND dolgu
+- **Bütün sinyal netleri yönlendirildi** (Freerouting + KiCad DRC); GND dikiş viaları,
+  F/B GND dolgu
+- Şema üretildi; şemadan çıkan netlist kartla **pin pin aynı**
+- Kırmızı lehim maskesi + ENIG stackup'ta tanımlı
 
 **Kalan iş**
-- Şema yakalama (netlist hazır)
-- Sinyal yollarının çizimi (güç bitti)
-- KiCad'in kendi DRC'si — benim kontrolüm yol/pad ve yerleşim çakışmasına bakıyor,
-  KiCad'inki üretim kurallarına da bakar
+- KiCad DRC'de birkaç güç bağlantısı kalıyor (bkz. `kicad/build/drc.rpt`, `make` ile üretilir) —
+  KiCad'de açıp ratsnest'e bakarak elle tamamlanabilir
+- İpek baskı yazılarının yerleşimi (uyarı seviyesinde)
+- Sipariş öncesi "Doğrulanacaklar" listesi
 
 ## Güç topolojisi
 
 ```
-XT60 -> F1 sigorta -> Q1 ters polarite -> RS1 shunt -> VSYS
+XT60 -> F1 -> Q1 ters polarite -> RS1 shunt (INA226) -> VSYS
                                                         |
-                        +-------------------------------+
-                        |            |                  |
-                    J3 klemens    U7 5V BEC        Q2 ACIL STOP
-                    (Gemstone)    (servo rayi)          |
-                                                    VBAT_SW -> DRV8874 x2
+                    +-------------------+---------------+-----------------+
+                    |                   |                                 |
+               J3 klemens         U7 5V BEC 3A                     Q2 ACIL STOP
+               (Gemstone)          |       |                            |
+                              servo rayı  U6 3V3 LDO           VBAT_SW -> DRV8874 x2
+                              LED, enkoder  -> ESP32, mantık
 ```
 
-Q2 arızada **kapalıdır**: gate VSYS'e pull-up'lı, açmak için ESP32'nin
-Q3'ü sürmesi gerekir. ESP32 ölürse motorlar durur.
+Q2 arızada **kapalıdır**: gate VSYS'e pull-up'lı. Motorlar ancak ESP32 Q3'ü sürerken
+**ve** J12'deki NC acil stop butonu kapalıyken güç alır. Ayrıntı:
+[docs/03-guc-mimarisi.md](docs/03-guc-mimarisi.md).
 
-## Çizim sırası
-
-1. Güç zinciri (XT60 → sigorta → ters polarite → passthrough + kollar)
-2. ESP32-S3 + USB-C + otomatik reset + BOOT/RESET
-3. DRV8874 ×2 + enkoder tamponu + klemensler
-4. PCA9685 + servo header + 5 V BEC
-5. I2C zinciri (INA226, OLED, Qwiic)
-6. 40-pin header + acil stop + WS2812
-
-4 katman: Sig / GND / PWR / Sig. Motor-servo güç bölgesi ile mantık bölgesini
-ayır, tek noktadan GND birleştir.
-
-## Doğrulanacaklar
+## Doğrulanacaklar (sipariş öncesi)
 
 1. **Gemstone DC giriş aralığı** — 5–9 V mı 5–12 V mi? (T3'e sor / e-fuse MPN'ine bak)
 2. **40-pin header konumu** — el yapımı Fritzing parçasından ölçüldü, kumpasla teyit et
 3. **Montaj delikleri** — layout PDF'inde MH1..MH7 var, Fritzing sadece 4'ünü çiziyor
 4. **Stacking header yüksekliği** — Gemstone'un üst yüzeyindeki en yüksek eleman ölçülmeli
+5. **Kamera kesiti** — `CUT` değerleri fotoğraftan tahmin
+6. **DRV8874 pinout'u** — KiCad kütüphanesinde yok; TI veri sayfasıyla bir kez daha karşılaştır
+7. **XT60 cinsiyeti** — kart tarafı bataryanın fişinin karşılığı olmalı (BOM: dişi)

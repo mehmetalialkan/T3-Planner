@@ -1,27 +1,26 @@
-"""T3-Redstone board generator - cekirdek: katmanlar, stackup, footprint ureticiler."""
-import math, uuid
+"""T3-Redstone - ortak: kart katmanlari, stackup, projeye ozel footprint'ler.
 
-def U(): return str(uuid.uuid4())
+Kutuphanede olmayan tek footprint servo header'i (3 x 8, 2.54 mm); burada
+uretilir ve T3RS.pretty/ altina yazilir. Geri kalan her sey KiCad'in resmi
+kutuphanesinden gelir.
+"""
+import os
+import uuid
 
-# ---------------------------------------------------------------- katmanlar
-LAYERS = [(0,"F.Cu","signal"),(1,"In1.Cu","signal"),(2,"In2.Cu","signal"),(31,"B.Cu","signal"),
- (32,"B.Adhes","user"),(33,"F.Adhes","user"),(34,"B.Paste","user"),(35,"F.Paste","user"),
- (36,"B.SilkS","user"),(37,"F.SilkS","user"),(38,"B.Mask","user"),(39,"F.Mask","user"),
- (40,"Dwgs.User","user"),(41,"Cmts.User","user"),(42,"Eco1.User","user"),(43,"Eco2.User","user"),
- (44,"Edge.Cuts","user"),(45,"Margin","user"),(46,"B.CrtYd","user"),(47,"F.CrtYd","user"),
- (48,"B.Fab","user"),(49,"F.Fab","user")]
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOCAL_LIB = os.path.join(HERE, "T3RS.pretty")
 
-# KIRMIZI lehim maskesi + ENIG, 4 katman 1.6mm
+# KIRMIZI lehim maskesi + ENIG, 4 katman 1.6 mm (JLC 7628 benzeri)
 STACKUP = '''    (stackup
       (layer "F.SilkS" (type "Top Silk Screen") (color "White"))
       (layer "F.Paste" (type "Top Solder Paste"))
       (layer "F.Mask" (type "Top Solder Mask") (color "Red") (thickness 0.01))
       (layer "F.Cu" (type "copper") (thickness 0.035))
-      (layer "dielectric 1" (type "prepreg") (thickness 0.2104) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
-      (layer "In1.Cu" (type "copper") (thickness 0.0175))
-      (layer "dielectric 2" (type "core") (thickness 1.065) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
-      (layer "In2.Cu" (type "copper") (thickness 0.0175))
-      (layer "dielectric 3" (type "prepreg") (thickness 0.2104) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
+      (layer "dielectric 1" (type "prepreg") (thickness 0.2104) (material "FR4") (epsilon_r 4.4) (loss_tangent 0.02))
+      (layer "In1.Cu" (type "copper") (thickness 0.0152))
+      (layer "dielectric 2" (type "core") (thickness 1.065) (material "FR4") (epsilon_r 4.6) (loss_tangent 0.02))
+      (layer "In2.Cu" (type "copper") (thickness 0.0152))
+      (layer "dielectric 3" (type "prepreg") (thickness 0.2104) (material "FR4") (epsilon_r 4.4) (loss_tangent 0.02))
       (layer "B.Cu" (type "copper") (thickness 0.035))
       (layer "B.Mask" (type "Bottom Solder Mask") (color "Red") (thickness 0.01))
       (layer "B.SilkS" (type "Bottom Silk Screen") (color "White"))
@@ -29,102 +28,125 @@ STACKUP = '''    (stackup
       (dielectric_constraints no)
     )'''
 
-# ------------------------------------------------------------ footprint uretici
-# Her uretici (padname, x, y, w, h, sekil, tip, drill) listesi + govde (w,h) dondurur.
 
-def sop(n, pitch, span, padw, padh, bodyw, bodyh, ep=None):
-    """SOIC/TSSOP/VSSOP/SSOP. n=toplam pin (cift). span=pad merkezleri arasi mesafe."""
-    pads=[]; per=n//2
-    y0=-(per-1)*pitch/2
-    for i in range(per):                       # sol kolon, yukaridan asagi
-        pads.append((str(i+1), -span/2, y0+i*pitch, padw, padh, "roundrect","smd",0))
-    for i in range(per):                       # sag kolon, asagidan yukari
-        pads.append((str(per+i+1), span/2, y0+(per-1-i)*pitch, padw, padh, "roundrect","smd",0))
-    if ep: pads.append(("EP",0,0,ep[0],ep[1],"rect","smd",0))
-    return pads,(bodyw,bodyh)
+def _u():
+    return str(uuid.uuid4())
 
-def sot23(n, pitch=0.95, span=2.6, padw=1.0, padh=0.6):
-    pads=[]
-    if n==5: left=[1,2,3]; right=[5,4]; ry=[-pitch,pitch]
-    else:    left=[1,2,3]; right=[6,5,4]; ry=[-pitch,0,pitch]
-    for i,p in enumerate(left):
-        pads.append((str(p), -span/2, (i-1)*pitch, padw, padh, "roundrect","smd",0))
-    for i,p in enumerate(right):
-        pads.append((str(p),  span/2, ry[i] if n==5 else (i-1)*pitch, padw, padh, "roundrect","smd",0))
-    return pads,(2.9,1.6)
 
-def chip(size="0805"):
-    d={"0603":(0.9,0.95,1.6,0.85),"0805":(1.0,1.3,2.0,1.25),"1206":(1.1,1.8,3.2,1.7),
-       "2512":(2.0,3.4,6.4,3.2),"5050":(2.6,3.2,5.0,5.0)}[size]
-    padw,span,bw,bh=d
-    return ([("1",-span/2,0,padw,bh*0.8,"roundrect","smd",0),
-             ("2", span/2,0,padw,bh*0.8,"roundrect","smd",0)],(bw,bh))
-
-def header(cols, rows, pitch=2.54, drill=1.0, pad=1.7):
-    """THT pin header/soket. Pin1 sol-ust, cift sira icin 1=alt sira."""
-    pads=[]
+def servo_header(cols=8, pitch=2.54):
+    """3 x cols erkek header. Her sutun bir servo: satir 0 = sinyal, 1 = +5V, 2 = GND.
+    Pin numarasi = 3*sutun + satir + 1. Origin = pin 1."""
+    name = f"Servo_3x{cols:02d}_P2.54mm"
+    w = (cols - 1) * pitch
+    lines = [f'(footprint "{name}" (version 20221018) (generator "t3-redstone")',
+             '  (layer "F.Cu")',
+             f'  (descr "Servo header 3x{cols}, 2.54mm. Satir: sinyal / +5V / GND")',
+             '  (tags "servo header PWM")',
+             '  (attr through_hole)',
+             f'  (fp_text reference "REF**" (at {w / 2:.2f} -2.6) (layer "F.SilkS") (tstamp "{_u()}")',
+             '    (effects (font (size 1 1) (thickness 0.15))))',
+             f'  (fp_text value "{name}" (at {w / 2:.2f} 7.7) (layer "F.Fab") (tstamp "{_u()}")',
+             '    (effects (font (size 1 1) (thickness 0.15))))']
+    x1, y1, x2, y2 = -1.27, -1.27, w + 1.27, 2 * pitch + 1.27
+    for lay, e, wd in (("F.SilkS", 0.11, 0.12), ("F.Fab", 0.0, 0.1), ("F.CrtYd", 0.5, 0.05)):
+        lines.append(f'  (fp_rect (start {x1 - e:.2f} {y1 - e:.2f}) (end {x2 + e:.2f} {y2 + e:.2f}) '
+                     f'(stroke (width {wd}) (type solid)) (fill none) (layer "{lay}") (tstamp "{_u()}"))')
+    # sinyal satiri isareti: pin 1 kosesi
+    lines.append(f'  (fp_line (start -1.65 -1.65) (end -1.65 0) (stroke (width 0.12) (type solid)) '
+                 f'(layer "F.SilkS") (tstamp "{_u()}"))')
     for c in range(cols):
-        for r in range(rows):
-            n = c*rows + r + 1
-            pads.append((str(n), c*pitch, -r*pitch, pad, pad,
-                         "rect" if n==1 else "circle","thru",drill))
-    w=(cols-1)*pitch+pad+1.0; h=(rows-1)*pitch+pad+1.0
-    return pads,(w,h)
+        for r in range(3):
+            n = 3 * c + r + 1
+            shape = "rect" if n == 1 else "oval"
+            lines.append(f'  (pad "{n}" thru_hole {shape} (at {c * pitch:.2f} {r * pitch:.2f}) '
+                         f'(size 1.6 1.6) (drill 1.0) (layers "*.Cu" "*.Mask") (tstamp "{_u()}"))')
+    lines.append(')')
+    return name, "\n".join(lines) + "\n"
 
-def terminal(n, pitch=5.08, drill=1.3, pad=2.4):
-    pads=[(str(i+1), i*pitch, 0, pad, pad, "rect" if i==0 else "circle","thru",drill) for i in range(n)]
-    return pads,((n-1)*pitch+pitch, 9.0)
 
-def jst_xh(n, pitch=2.5, drill=0.9, pad=1.6):
-    pads=[(str(i+1), i*pitch, 0, pad, pad, "rect" if i==0 else "circle","thru",drill) for i in range(n)]
-    return pads,((n-1)*pitch+4.0, 6.0)
+def make_local_footprints():
+    os.makedirs(LOCAL_LIB, exist_ok=True)
+    name, text = servo_header()
+    path = os.path.join(LOCAL_LIB, name + ".kicad_mod")
+    old = open(path).read() if os.path.exists(path) else None
+    # tstamp'ler her seferinde degismesin: icerik ayniysa dosyaya dokunma
+    if old is None or _strip_uuid(old) != _strip_uuid(text):
+        open(path, "w").write(text)
+    return LOCAL_LIB
 
-def jst_sh(n, pitch=1.0):
-    pads=[(str(i+1),(i-(n-1)/2)*pitch, 0, 0.6, 1.55,"roundrect","smd",0) for i in range(n)]
-    pads+= [("MP1",-(n*pitch/2+1.3),-1.8,1.2,1.8,"roundrect","smd",0),
-            ("MP2", (n*pitch/2+1.3),-1.8,1.2,1.8,"roundrect","smd",0)]
-    return pads,(n*pitch+3.6, 4.25)
 
-def xt60():
-    return ([("1",-3.9,0,3.5,3.5,"circle","thru",2.6),
-             ("2", 3.9,0,3.5,3.5,"circle","thru",2.6)],(16.0,8.0))
+def _strip_uuid(s):
+    import re
+    return re.sub(r'\(tstamp "[^"]*"\)', "", s)
 
-def tact_smd():
-    return ([("1",-3.25,-1.1,1.2,1.4,"roundrect","smd",0),("2",3.25,-1.1,1.2,1.4,"roundrect","smd",0),
-             ("3",-3.25, 1.1,1.2,1.4,"roundrect","smd",0),("4",3.25, 1.1,1.2,1.4,"roundrect","smd",0)],(6.0,3.8))
 
-def ufl():
-    return ([("1",0,-1.5,1.0,1.05,"roundrect","smd",0),
-             ("2",-1.55,1.1,1.4,1.0,"roundrect","smd",0),
-             ("2",1.55,1.1,1.4,1.0,"roundrect","smd",0)],(3.0,3.0))
+# ----------------------------------------------------------------- semboller
+LOCAL_SYM = os.path.join(HERE, "T3RS.kicad_sym")
 
-def usbc_16():
-    """USB-C 16 pin yatay soket, basitlestirilmis (sadece USB2.0 hatlari)."""
-    pads=[]
-    names=["A1","A4","A5","A6","A7","A9","A12","B1","B4","B5","B6","B7","B9","B12"]
-    xs=[-3.2,-2.4,-1.6,-0.8,0.0,0.8,1.6,-3.2+0.4,-2.4+0.4,-1.6+0.4,-0.8+0.4,0.4,1.2,2.0]
-    for i,(nm,x) in enumerate(zip(names,xs)):
-        pads.append((nm, x, -0.9 if i<7 else 0.9, 0.3, 1.15,"roundrect","smd",0))
-    for i,x in enumerate((-4.32,4.32)):
-        pads.append((f"S{i+1}", x, 0, 2.1, 3.4,"roundrect","smd",0))
-    return pads,(9.0,7.5)
 
-def wroom1u():
-    """ESP32-S3-WROOM-1U (18.0 x 19.2 mm), 1.27mm kastelasyon.
-    !! Pad numaralari veri sayfasindan; uretime gitmeden resmi kutuphane
-       footprint'i ile karsilastir."""
-    pads=[]; P=1.27; BW,BH=18.0,19.2
-    y0=-(15-1)*P/2
-    for i in range(15):                                   # 1..15 sol kenar
-        pads.append((str(i+1), -BW/2+0.45, y0+i*P, 1.5, 0.9,"roundrect","smd",0))
-    x0=-(9-1)*P/2
-    for i in range(9):                                    # 16..24 alt kenar
-        pads.append((str(16+i), x0+i*P, BH/2-0.45, 0.9, 1.5,"roundrect","smd",0))
-    for i in range(15):                                   # 25..39 sag kenar
-        pads.append((str(25+i), BW/2-0.45, y0+(14-i)*P, 1.5, 0.9,"roundrect","smd",0))
-    pads.append(("40", -BW/2+0.45, y0-P, 1.5, 0.9,"roundrect","smd",0))
-    pads.append(("41", 0, 0, 5.3, 5.3,"rect","smd",0))    # termal pad
-    return pads,(BW,BH)
+def _pin(kind, x, y, ang, name, num, length=2.54):
+    return (f'      (pin {kind} line (at {x:.2f} {y:.2f} {ang}) (length {length})\n'
+            f'        (name "{name}" (effects (font (size 1.27 1.27))))\n'
+            f'        (number "{num}" (effects (font (size 1.27 1.27)))))')
 
-def mount(d=2.75):
-    return ([("", 0,0,d,d,"circle","np",d)],(d+1.5,d+1.5))
+
+def _symbol(name, ref, value, fp, ds, w, h, pins, desc):
+    hw, hh = w / 2, h / 2
+    out = [f'  (symbol "{name}" (in_bom yes) (on_board yes)',
+           f'    (property "Reference" "{ref}" (at {-hw:.2f} {hh + 1.27:.2f} 0) '
+           '(effects (font (size 1.27 1.27)) (justify left)))',
+           f'    (property "Value" "{value}" (at {-hw:.2f} {-hh - 1.27:.2f} 0) '
+           '(effects (font (size 1.27 1.27)) (justify left)))',
+           f'    (property "Footprint" "{fp}" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))',
+           f'    (property "Datasheet" "{ds}" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))',
+           f'    (property "ki_description" "{desc}" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))',
+           f'    (symbol "{name}_0_1"',
+           f'      (rectangle (start {-hw:.2f} {hh:.2f}) (end {hw:.2f} {-hh:.2f}) '
+           '(stroke (width 0.254) (type default)) (fill (type background))))',
+           f'    (symbol "{name}_1_1"']
+    out += pins
+    out += ['    )', '  )']
+    return out
+
+
+def drv8874_symbol():
+    # TI SLVSF66: PWP 16 pin + PowerPAD
+    L = [("1", "EN/IN1", "input"), ("2", "PH/IN2", "input"), ("3", "~{nSLEEP}", "input"),
+         ("4", "~{nFAULT}", "open_collector"), ("5", "VREF", "input"), ("6", "IPROPI", "output"),
+         ("7", "IMODE", "input"), ("16", "PMODE", "input")]
+    Rr = [("11", "VM", "power_in"), ("12", "VCP", "passive"), ("13", "CPH", "passive"),
+          ("14", "CPL", "passive"), ("8", "OUT1", "output"), ("10", "OUT2", "output")]
+    pins = []
+    for i, (n, nm, k) in enumerate(L):
+        pins.append(_pin(k, -12.7, 8.89 - 2.54 * i, 0, nm, n))
+    for i, (n, nm, k) in enumerate(Rr):
+        pins.append(_pin(k, 12.7, 8.89 - 2.54 * i - (2.54 if i >= 4 else 0), 180, nm, n))
+    for i, (n, nm) in enumerate((("9", "PGND"), ("15", "GND"), ("17", "PAD"))):
+        pins.append(_pin("power_in", -2.54 + 2.54 * i, -15.24, 90, nm, n))
+    return _symbol("DRV8874PWP", "U", "DRV8874PWP",
+                   "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias",
+                   "https://www.ti.com/lit/ds/symlink/drv8874.pdf", 20.32, 25.4, pins,
+                   "37V 6A H-kopru surucu, IPROPI akim cikisli")
+
+
+def servo_symbol(cols=8):
+    pins = []
+    for i in range(cols):
+        y = 8.89 - 2.54 * i
+        pins.append(_pin("passive", -13.97, y, 0, f"S{i + 1}", str(3 * i + 1)))
+        pins.append(_pin("passive", 13.97, y, 180, f"+{i + 1}", str(3 * i + 2)))
+        pins.append(_pin("passive", -8.89 + 2.54 * i, -13.97, 90, f"-{i + 1}", str(3 * i + 3)))
+    return _symbol(f"Servo_3x{cols:02d}", "J", f"Servo_3x{cols:02d}",
+                   f"T3RS:Servo_3x{cols:02d}_P2.54mm", "", 22.86, 22.86, pins,
+                   "Servo header: sinyal / +V / GND")
+
+
+def make_local_symbols():
+    lines = ['(kicad_symbol_lib (version 20220914) (generator t3-redstone)']
+    lines += drv8874_symbol() + servo_symbol()
+    lines.append(')')
+    text = "\n".join(lines) + "\n"
+    old = open(LOCAL_SYM).read() if os.path.exists(LOCAL_SYM) else None
+    if old != text:
+        open(LOCAL_SYM, "w").write(text)
+    return LOCAL_SYM
