@@ -188,7 +188,7 @@ for p in D.PARTS:
     ref.SetTextSize(pcbnew.VECTOR2I(MM(0.8), MM(0.8)))
     ref.SetTextThickness(MM(0.12))
     # kucuk pasiflerin ve kenara sigmayanlarin referansi fabrikasyon katmanina
-    if re.match(r"(R|C|L|D)\d|RN|RS|MH|DS|J11$|J12$|LS1$|J2$|Q\d|U([2-35-7]|9|10)$", p["ref"]):
+    if re.match(r"(R|C|L|D)\d|RN|RS|MH|DS|J8A$|J11$|J12$|LS1$|J2$|Q\d|U([2-35-7]|9|10)$", p["ref"]):
         ref.SetLayer(pcbnew.B_Fab if p["side"] == "B" else pcbnew.F_Fab)
     FP_REF_AT[p["ref"]] = None
     # footprint'in kendi "1" gibi ek ipek yazilari (LED pin-1) pedlerin ustune dusuyor

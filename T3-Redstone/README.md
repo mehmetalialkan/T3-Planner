@@ -84,11 +84,11 @@ yapar. Ayrıntı: [docs/03-guc-mimarisi.md](docs/03-guc-mimarisi.md)
 | `kicad/t3-redstone.kicad_sch` | **Şema** — `rs_design.py`'den üretilir, netlist kartla pin pin aynı |
 | `kicad/rs_design.py` | **Tek kaynak**: parçalar, footprint'ler, pad → net, yerleşim, güç dağıtımı |
 | `kicad/rs_build.py` | Kartı KiCad'in `pcbnew` API'siyle kurar (resmi kütüphane footprint'leri) |
-| `kicad/rs_route.py` | Freerouting ile sinyal yönlendirme, GND dikiş viaları, dolgu, KiCad DRC |
+| `kicad/rs_route.py` | Freerouting ile yönlendirme, güç fanout'u, GND dikiş viaları, dolgu, kalan kopuklar için labirent yönlendirici, KiCad DRC |
 | `kicad/rs_sch.py` | Şemayı üretir; `--check` şemadan netlist çıkarıp tasarımla karşılaştırır |
 | `kicad/rs_bom.py` · `rs_docs.py` · `rs_render.py` | BOM, netlist belgesi, önizleme SVG |
 | `kicad/T3RS.pretty` · `T3RS.kicad_sym` | Projeye özel footprint (servo 3×8) ve semboller (DRV8874, servo) |
-| `mekanik/t3-redstone-preview.svg` | Kartın üstten görünümü (kicad-cli) |
+| `mekanik/t3-redstone-preview.svg` · `.png` | Kartın üstten görünümü (kicad-cli) |
 | `mekanik/t3-redstone-outline.dxf` | Kontur + delikler (her CAD'e girer) |
 | `bom/bom.csv` | Parça listesi, MPN'li — `rs_design.py`'den üretilir |
 | `docs/01-gemstone-o1-analiz.md` | Gemstone O1 donanım analizi, 40-pin tablosu, EQEP, PWM tuzağı |
@@ -109,24 +109,31 @@ KiCad 7 (`pcbnew` Python modülüyle), Java 25+ ve Freerouting 2.4.1 gerekir
 Bir pin ya da koordinat değiştirmek için yalnızca `rs_design.py`'yi düzenle.
 Dosyalar KiCad 7 biçiminde üretilir; KiCad 8 / 9 açar.
 
+Freerouting her çalıştırmada biraz farklı yol çizer; `rs_route.py` kalan kopuk parçaları
+kendi küçük yönlendiricisiyle tamamlar ve sonunda KiCad DRC'yi çalıştırır
+(`kicad/build/drc.rpt`). `python3 rs_route.py --no-route` son Freerouting sonucunu
+(`build/t3-redstone.ses`) yeniden kullanır — yerleşim değişmediyse aynı kartı birebir üretir.
+
 ## Kartın durumu (rev B)
 
 **Bitmiş olanlar**
 - Bütün entegre pinleri resmi kütüphaneyle / veri sayfasıyla karşılaştırıldı; rev A'daki
   14 kritik hata düzeltildi — liste: [docs/05-revB-degisiklikler.md](docs/05-revB-degisiklikler.md)
-- 87 komponent (resmi KiCad footprint'leri), 83 net; yerleşim çakışmasız
+- 87 komponent (resmi KiCad footprint'leri), 85 net; yerleşim çakışmasız
 - 4 katman: `F.Cu` sinyal + güç dökümleri · `In1.Cu` kesintisiz GND · `In2.Cu` bölünmüş güç
   (VSYS / +5V / +3V3 / VBAT_SW) · `B.Cu` sinyal + GND dolgu
-- **Bütün sinyal netleri yönlendirildi** (Freerouting + KiCad DRC); GND dikiş viaları,
-  F/B GND dolgu
+- **Kart tamamen yönlendirildi — KiCad DRC: 0 ihlal, 0 bağlantısız ped, 0 footprint hatası**
+  (ipek baskı ve kenar açıklıkları dahil); GND dikiş viaları, F/B GND dolgu
+- Dekuplaj kondansatörleri pinlerin yanında: C2 (LDO çıkışı) ve C4 (ESP32 3V3) yönleri,
+  C12 (PCA9685) konumu düzeltildi
+- +3V3: solda In2 düzlemi, orta ve sağdaki tüketicilere B.Cu omurgası
 - Şema üretildi; şemadan çıkan netlist kartla **pin pin aynı**
 - Kırmızı lehim maskesi + ENIG stackup'ta tanımlı
 
 **Kalan iş**
-- KiCad DRC'de birkaç güç bağlantısı kalıyor (bkz. `kicad/build/drc.rpt`, `make` ile üretilir) —
-  KiCad'de açıp ratsnest'e bakarak elle tamamlanabilir
-- İpek baskı yazılarının yerleşimi (uyarı seviyesinde)
-- Sipariş öncesi "Doğrulanacaklar" listesi
+- Sipariş öncesi "Doğrulanacaklar" listesi (aşağıda) — özellikle 40-pin header ve montaj
+  deliği konumları kumpasla teyit edilmeden üretime gönderme
+- KiCad 8/9'da açıp bir kez gözle kontrol + Gerber / delik / CPL çıktıları
 
 ## Güç topolojisi
 

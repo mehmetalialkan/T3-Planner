@@ -686,10 +686,311 @@ def stitch_islands():
     return added
 
 
+# ------------------------------------------------------ kucuk labirent yonlendirici
+# Freerouting'in biraktigi kopuk parcalar (ozellikle +3V3 duzleminin disindaki
+# tuketiciler) icin: 0.1 mm izgarada F.Cu / B.Cu + via, Dijkstra.
+NET_W = {n: v["track"] for v in D.NETCLASS.values() for n in v["nets"]}
+NET_CL = {n: v["clearance"] for v in D.NETCLASS.values() for n in v["nets"]}
+GRID = MM(0.1)
+SAFE = MM(0.08)                 # izgara hatasi payi (yarim hucre kosegeni 0.071)
+VIA_COST = 15                   # bir via ~ 1.5 mm yol
+
+
+def _cl(name):
+    return MM(NET_CL.get(name, D.DEFAULT["clearance"]))
+
+
+def maze_join(net, a_pos, a_pad, b_pos=None, b_pad=None, margin=4.0):
+    """a parcasini b parcasina (b yoksa netin duzlemine inen bir via'ya) bagla."""
+    import heapq
+    ta, pa = group_of(net, [a_pos], [a_pad] if a_pad else [])
+    tb, pb = group_of(net, [b_pos], [b_pad] if b_pad else []) if b_pos is not None else ([], [])
+    plane_ok = b_pos is None and net in PLANE_NETS
+    if not (ta or pa) or (b_pos is not None and not (tb or pb)):
+        return False
+    uid = lambda o: o.m_Uuid.AsString()            # noqa: E731
+    if {uid(o) for o in ta + pa} & {uid(o) for o in tb + pb}:
+        return False
+    w = MM(min(NET_W.get(net, D.DEFAULT["track"]), 0.2))
+    rv = MM(VIA_D / 2)
+    mycl = _cl(net)
+    pts = []
+    for t in ta + tb:
+        pts += [t.GetPosition()] if t.GetClass() == "PCB_VIA" else [t.GetStart(), t.GetEnd()]
+    pts += [q.GetPosition() for q in pa + pb]
+    m = MM(margin)
+    x0, x1 = min(p.x for p in pts) - m, max(p.x for p in pts) + m
+    y0, y1 = min(p.y for p in pts) - m, max(p.y for p in pts) + m
+    nx, ny = int((x1 - x0) / GRID) + 1, int((y1 - y0) / GRID) + 1
+    if nx * ny > 400000:
+        return False
+    L = 2
+    blk_t = [bytearray(nx * ny) for _ in range(L)]    # yol merkezi yasak
+    blk_v = bytearray(nx * ny)                         # via merkezi yasak
+    on_a = [bytearray(nx * ny) for _ in range(L)]
+    on_b = [bytearray(nx * ny) for _ in range(L)]
+    LAY = {pcbnew.F_Cu: 0, pcbnew.B_Cu: 1}
+
+    def cell_range(bx0, by0, bx1, by1):
+        i0, i1 = max(0, int((bx0 - x0) / GRID)), min(nx - 1, int((bx1 - x0) / GRID) + 1)
+        j0, j1 = max(0, int((by0 - y0) / GRID)), min(ny - 1, int((by1 - y0) / GRID) + 1)
+        for j in range(j0, j1 + 1):
+            for i in range(i0, i1 + 1):
+                yield i, j, pcbnew.VECTOR2I(x0 + i * GRID, y0 + j * GRID)
+
+    def stamp(layers, bb, dist_fn, cl):
+        """dist_fn(p) = bakirin kenarina uzaklik (icerde <= 0)"""
+        mt, mv = w / 2 + cl + SAFE, rv + cl + SAFE
+        mx = max(mt, mv)
+        for i, j, p in cell_range(bb[0] - mx, bb[1] - mx, bb[2] + mx, bb[3] + mx):
+            d = dist_fn(p)
+            k = j * nx + i
+            if d < mt:
+                for l_ in layers:
+                    blk_t[l_][k] = 1
+            if d < mv:
+                blk_v[k] = 1
+
+    def inside(bb):
+        return bb[2] >= x0 - MM(2) and bb[0] <= x1 + MM(2) and bb[3] >= y0 - MM(2) and bb[1] <= y1 + MM(2)
+
+    # engeller: baska netlerin yollari, via'lari, pedleri, dokumleri (GND yuzey dokumu haric)
+    for t in board.GetTracks():
+        if t.GetNetname() == net:
+            continue
+        if t.GetClass() == "PCB_VIA":
+            c, r = t.GetPosition(), t.GetWidth() / 2
+            bb = (c.x - r, c.y - r, c.x + r, c.y + r)
+            if inside(bb):
+                stamp((0, 1), bb, lambda p, c=c, r=r: _dist(p, c) - r, max(mycl, _cl(t.GetNetname())))
+        elif t.GetLayer() in LAY:
+            a_, b_, r = t.GetStart(), t.GetEnd(), t.GetWidth() / 2
+            bb = (min(a_.x, b_.x) - r, min(a_.y, b_.y) - r, max(a_.x, b_.x) + r, max(a_.y, b_.y) + r)
+            if inside(bb):
+                stamp((LAY[t.GetLayer()],), bb, lambda p, a_=a_, b_=b_, r=r: seg_dist(p, a_, b_) - r,
+                      max(mycl, _cl(t.GetNetname())))
+    for fp in board.GetFootprints():
+        for q in fp.Pads():
+            if q.GetNetname() == net and q.GetNetname():
+                continue
+            npth = q.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH
+            layers = tuple(LAY[l_] for l_ in LAY if q.IsOnLayer(l_) or npth)
+            if not layers:
+                continue
+            b0 = q.GetBoundingBox()
+            bb = (b0.GetLeft(), b0.GetTop(), b0.GetRight(), b0.GetBottom())
+            if not inside(bb):
+                continue
+            cl = max(mycl, _cl(q.GetNetname()))
+            mt, mv = w / 2 + cl + SAFE, rv + cl + SAFE
+            mx = max(mt, mv)
+            for i, j, p in cell_range(bb[0] - mx, bb[1] - mx, bb[2] + mx, bb[3] + mx):
+                k = j * nx + i
+                if q.HitTest(p, int(mt)):
+                    for l_ in layers:
+                        blk_t[l_][k] = 1
+                if q.HitTest(p, int(mv)):
+                    blk_v[k] = 1
+    for z in board.Zones():
+        if z.GetNetname() == net or z.GetZoneName() in ("GND_F", "GND_B"):
+            continue
+        layers = tuple(LAY[l_] for l_ in LAY if z.IsOnLayer(l_))
+        if not layers:
+            continue
+        b0 = z.Outline().BBox()
+        bb = (b0.GetLeft(), b0.GetTop(), b0.GetRight(), b0.GetBottom())
+        if not inside(bb):
+            continue
+        cl = max(mycl, MM(0.2))
+        mt, mv = w / 2 + cl + SAFE, rv + cl + SAFE
+        mx = max(mt, mv)
+        for i, j, p in cell_range(bb[0] - mx, bb[1] - mx, bb[2] + mx, bb[3] + mx):
+            k = j * nx + i
+            if z.Outline().Collide(p, int(mt)):
+                for l_ in layers:
+                    blk_t[l_][k] = 1
+            if z.Outline().Collide(p, int(mv)):
+                blk_v[k] = 1
+    # kart kenari
+    for j in range(ny):
+        for i in range(nx):
+            p = pcbnew.VECTOR2I(x0 + i * GRID, y0 + j * GRID)
+            if not on_board(p, 0.35 + pcbnew.ToMM(w) / 2):
+                blk_t[0][j * nx + i] = blk_t[1][j * nx + i] = 1
+            if not on_board(p, 0.35 + VIA_D / 2):
+                blk_v[j * nx + i] = 1
+
+    # kaynak / hedef: parcalarin kendi bakiri
+    def mark(dst, tracks, pads):
+        for t in tracks:
+            if t.GetClass() == "PCB_VIA":
+                c, r = t.GetPosition(), t.GetWidth() / 2 - MM(0.05)
+                for i, j, p in cell_range(c.x - r, c.y - r, c.x + r, c.y + r):
+                    if _dist(p, c) <= r:
+                        dst[0][j * nx + i] = dst[1][j * nx + i] = 1
+            elif t.GetLayer() in LAY:
+                a_, b_, r = t.GetStart(), t.GetEnd(), max(t.GetWidth() / 2 - MM(0.05), MM(0.02))
+                for i, j, p in cell_range(min(a_.x, b_.x) - r, min(a_.y, b_.y) - r,
+                                          max(a_.x, b_.x) + r, max(a_.y, b_.y) + r):
+                    if seg_dist(p, a_, b_) <= r:
+                        dst[LAY[t.GetLayer()]][j * nx + i] = 1
+        for q in pads:
+            b0 = q.GetBoundingBox()
+            for i, j, p in cell_range(b0.GetLeft(), b0.GetTop(), b0.GetRight(), b0.GetBottom()):
+                if q.HitTest(p, -int(MM(0.05))):
+                    for l_ in LAY:
+                        if q.IsOnLayer(l_):
+                            dst[LAY[l_]][j * nx + i] = 1
+    mark(on_a, ta, pa)
+    mark(on_b, tb, pb)
+
+    def is_goal(l_, k):
+        if on_b[l_][k]:
+            return True, False
+        if plane_ok and not blk_v[k]:
+            p = pcbnew.VECTOR2I(x0 + (k % nx) * GRID, y0 + (k // nx) * GRID)
+            if in_plane(net, p):
+                return True, True
+        return False, False
+
+    INF = float("inf")
+    dist = [[INF] * (nx * ny) for _ in range(L)]
+    prev = [dict() for _ in range(L)]
+    pq = []
+    for l_ in range(L):
+        for k in range(nx * ny):
+            if on_a[l_][k] and not blk_t[l_][k]:
+                dist[l_][k] = 0
+                pq.append((0, l_, k))
+    heapq.heapify(pq)
+    steps = [(1, 0, 1), (-1, 0, 1), (0, 1, 1), (0, -1, 1),
+             (1, 1, 1.4142), (1, -1, 1.4142), (-1, 1, 1.4142), (-1, -1, 1.4142)]
+    goal = None
+    while pq:
+        d, l_, k = heapq.heappop(pq)
+        if d > dist[l_][k]:
+            continue
+        ok, needs_via = is_goal(l_, k)
+        if ok and d > 0:
+            goal = (l_, k, needs_via)
+            break
+        i, j = k % nx, k // nx
+        for di, dj, c in steps:
+            ii, jj = i + di, j + dj
+            if not (0 <= ii < nx and 0 <= jj < ny):
+                continue
+            kk = jj * nx + ii
+            if blk_t[l_][kk]:
+                continue
+            nd = d + c
+            if nd < dist[l_][kk]:
+                dist[l_][kk] = nd
+                prev[l_][kk] = (l_, k)
+                heapq.heappush(pq, (nd, l_, kk))
+        if not blk_v[k]:
+            ol = 1 - l_
+            nd = d + VIA_COST
+            if not blk_t[ol][k] and nd < dist[ol][k]:
+                dist[ol][k] = nd
+                prev[ol][k] = (l_, k)
+                heapq.heappush(pq, (nd, ol, k))
+    if goal is None:
+        return False
+    l_, k, needs_via = goal
+    path = [(l_, k)]
+    while dist[l_][k] != 0:
+        l_, k = prev[l_][k]
+        path.append((l_, k))
+    path.reverse()
+
+    def P(k):
+        return pcbnew.VECTOR2I(x0 + (k % nx) * GRID, y0 + (k // nx) * GRID)
+    netinfo = board.FindNet(net)
+    lay_id = {0: pcbnew.F_Cu, 1: pcbnew.B_Cu}
+
+    def clear_line(l_, ka, kb):
+        ia, ja, ib, jb = ka % nx, ka // nx, kb % nx, kb // nx
+        n = max(abs(ib - ia), abs(jb - ja)) * 2
+        for s_ in range(n + 1):
+            i = int(round(ia + (ib - ia) * s_ / n))
+            j = int(round(ja + (jb - ja) * s_ / n))
+            if blk_t[l_][j * nx + i]:
+                return False
+        return True
+
+    # katmana gore parcala, her parcada "ip cek": engelsiz en uzak noktaya duz git
+    runs, cur = [], [path[0]]
+    for a_, b_ in zip(path, path[1:]):
+        if a_[0] != b_[0]:
+            runs.append(cur)
+            add_via(net, P(a_[1]))
+            cur = [b_]
+        else:
+            cur.append(b_)
+    runs.append(cur)
+    for run in runs:
+        l_ = run[0][0]
+        ks = [k_ for _, k_ in run]
+        i = 0
+        while i < len(ks) - 1:
+            j = len(ks) - 1
+            while j > i + 1 and not clear_line(l_, ks[i], ks[j]):
+                j -= 1
+            _maze_track(netinfo, P(ks[i]), P(ks[j]), w, lay_id[l_])
+            i = j
+    ke = path[-1][1]
+    if needs_via:
+        add_via(net, P(ke))
+    return True
+
+
+def _maze_track(netinfo, a, b, w, layer):
+    t = pcbnew.PCB_TRACK(board)
+    t.SetStart(a)
+    t.SetEnd(b)
+    t.SetWidth(int(w))
+    t.SetLayer(layer)
+    t.SetNet(netinfo)
+    board.Add(t)
+
+
+def prune_dangling(rpt):
+    """Freerouting'in biraktigi tek katmanli via'lari ve ucu bos yol parcalarini sil."""
+    n = 0
+    for kind in ("via_dangling", "track_dangling"):
+        for blk in rpt.split(f"[{kind}]")[1:]:
+            blk = blk.split("\n[")[0]
+            for x_, y_, what in re.findall(r"@\(([\d.]+) mm, ([\d.]+) mm\): (.*)", blk):
+                pos = pcbnew.VECTOR2I(MM(float(x_)), MM(float(y_)))
+                for t in list(board.GetTracks()):
+                    if t.IsLocked():
+                        continue
+                    if kind == "via_dangling" and t.GetClass() == "PCB_VIA" and \
+                            _dist(t.GetPosition(), pos) < MM(0.01):
+                        board.Delete(t)
+                        n += 1
+                        break
+                    if kind == "track_dangling" and t.GetClass() == "PCB_TRACK" and \
+                            seg_dist(pos, t.GetStart(), t.GetEnd()) < MM(0.01):
+                        board.Delete(t)
+                        n += 1
+                        break
+    return n
+
+
 def repair_loop():
     rpt = ''
-    for it in range(4):
+    for it in range(6):
         rpt = drc()
+        n_pr = 0
+        for _ in range(8):                             # bos uclari zincir halinde temizle
+            k_ = prune_dangling(rpt)
+            if not k_:
+                break
+            n_pr += k_
+            rpt = drc()
+        if n_pr:
+            print(f"   bos uclu via / yol silindi: {n_pr}")
         n_isl = stitch_islands()
         fixed = 0
         seen = set()
@@ -702,7 +1003,7 @@ def repair_loop():
             if len(items) == 2 and all(items) and items[0][0] == items[1][0] != "GND" and \
                     items[0][1] not in seen and items[1][1] not in seen:
                 (net, ka, pa_, qa), (_, kb, pb_, qb) = items
-                if join_groups(net, qa, pa_, qb, pb_):
+                if join_groups(net, qa, pa_, qb, pb_) or maze_join(net, qa, pa_, qb, pb_):
                     seen.update((ka, kb))
                     joined += 1
                     continue
@@ -713,7 +1014,7 @@ def repair_loop():
                 if net not in PLANE_NETS or key in seen:
                     continue
                 seen.add(key)
-                if repair_group(net, pos, pad_):
+                if repair_group(net, pos, pad_) or maze_join(net, pos, pad_):
                     fixed += 1
         fixed += joined
         print(f"onarim turu {it + 1}: {fixed - joined} grup duzleme baglandi, {joined} parca "
