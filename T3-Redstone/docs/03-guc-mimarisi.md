@@ -74,7 +74,10 @@ Ham 2S gerilimini doğrudan yiyor. 5 V üretmek:
 | F.Cu | sinyal + yüksek akım dökümleri (XT60 → F1 → Q1 → RS1, Q2, motor çıkışları) |
 | In1.Cu | kesintisiz GND düzlemi |
 | In2.Cu | bölünmüş güç: VSYS (sol-alt), +5V (orta / sağ-üst), +3V3 (ESP32 bölgesi), VBAT_SW (motor bölgesi) |
-| B.Cu | sinyal + GND dolgu; VSYS'i sağa taşıyan 2 mm gövde (y = 21.4 mm) |
+| B.Cu | sinyal + GND dolgu; VSYS'i Q2'ye taşıyan 2 mm gövde (kamera kesitinin hemen üstü, y = 15.4 mm); LDO çıkışından orta ve sağ bölgedeki 3V3 tüketicilerine (PCA9685, INA226, 74LVC245, DRV8874 VREF, Qwiic) giden 0.4 mm +3V3 omurgası |
 
-INA226 shunt'a **Kelvin** bağlıdır: IN+ RS1'in batarya tarafındaki pedin dibinden,
-IN−/VBUS çıkış tarafındaki pedden ayrı ince yollarla alınır.
+B.Cu'daki iki gövde bilerek orada: ESP32'den sürücülere giden sinyaller F.Cu'da ikisinin de üstünden via'sız geçer.
+
+INA226 shunt'a **Kelvin** bağlıdır: RS1 dört uçlu bir shunt'tır (Vishay WSK2512, 2 mΩ).
+Akım 1–4 pedlerinden geçer; IN+ / IN− (ve VBUS) ayrı ölçüm pedlerinden (2, 3) kendi
+netleriyle (`SNS_P`, `SNS_N`) alınır, böylece bakır direnci ölçüme girmez.

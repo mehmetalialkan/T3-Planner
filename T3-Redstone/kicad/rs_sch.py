@@ -64,7 +64,9 @@ def lib_for(p):
         return "LED:SK6812MINI"
     if r.startswith("MH"):
         return "Mechanical:MountingHole"
-    if r.startswith("RS") or p["fp"].startswith("Resistor_SMD:R_0"):
+    if r.startswith("RS"):
+        return "Device:R_Shunt"
+    if p["fp"].startswith("Resistor_SMD:R_0"):
         return "Device:R"
     if p["fp"].startswith("Capacitor_SMD:C_"):
         return "Device:C"

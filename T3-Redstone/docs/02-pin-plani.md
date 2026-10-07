@@ -31,35 +31,38 @@ Gerekli overlay: `k3-am67a-t3-gem-o1-uart-ttys3.dtbo`
 
 ## 2. ESP32-S3 pin atama
 
-Modül: **ESP32-S3-WROOM-1-N8R2**
+Modül: **ESP32-S3-WROOM-1U-N8R2** (U.FL anten konnektörü modülün üstünde)
 > N8R8 (octal PSRAM) ALMA — GPIO33–37'yi kullanılamaz hale getirir.
 
-| Fonksiyon | GPIO | Not |
-|---|---|---|
-| Motor A — PH (yön) | 4 | DRV8874 |
-| Motor A — EN (PWM) | 5 | LEDC/MCPWM |
-| Motor B — PH | 6 | |
-| Motor B — EN (PWM) | 7 | |
-| Sürücü nSLEEP (ortak) | 15 | düşük = motorlar serbest |
-| Sürücü nFAULT (ortak) | 16 | açık drenaj, pull-up gerekir |
-| Akım geri besleme A | 1 | ADC1_CH0, IPROPI |
-| Akım geri besleme B | 2 | ADC1_CH1, IPROPI |
-| Enkoder A — kanal A / B | 8 / 9 | PCNT birimi 0 |
-| Enkoder B — kanal A / B | 10 / 11 | PCNT birimi 1 |
-| I2C SDA / SCL | 41 / 42 | 4.7k pull-up |
-| Host UART TX / RX | 47 / 48 | 921600 baud |
-| SK6812MINI durum LED | 40 | 4 adet zincir, 74AHCT1G125 ile 5 V'a çevrilir |
-| Acil stop döngüsü (ESTOP_LOOP) | 18 | giriş; 0 = buton kapalı (normal), 1 = basılı / kablo kopuk |
-| Acil stop sürücü (ESTOP_DRV) | 21 | çıkış; 1 = motor gücünü aç. 100 k pull-down: reset'te kapalı |
-| Acil stop durumu → host (ESTOP_STAT) | 12 | çıkış → 40-pin pin 13 |
-| INA226 ALERT (PWR_ALERT) | 14 | giriş, 10 k pull-up |
-| Bumper 1 / 2 | 38 / 39 | giriş, pull-up |
-| Genel amaçlı header (J14) | 13, 17 | 3V3 / IO13 / IO17 / GND |
-| Debug konsol | USB-C | ESP32-S3 dahili USB-Serial/JTAG (UART0 pinleri bağlı değil) |
-| BOOT butonu | 0 | strapping |
-| USB D− / D+ | 19 / 20 | USB-C, flaşlama |
-| **KULLANMA** | 26–37 | dahili flash/PSRAM (modülde IO35–37 dışarı çıkar, bağlı değil) |
-| Bağlı değil (strap) | 3, 45, 46 | boot strap pinleri, boş bırakıldı |
+Pinler kartın **coğrafyasına göre** dağıtıldı: ESP32-S3'te LEDC/MCPWM, PCNT ve UART
+GPIO matrisiyle her pine atanabildiği için, sürücülere giden sinyaller modülün alt
+sırasından, enkoder/I2C sağ kenarından, host ve konnektör sinyalleri sol kenarından
+çıkar. (Rev A'da motor sinyalleri sol kenardaydı ve kartı boydan boya dolaşıyordu.)
+
+| Fonksiyon | GPIO | Modül pini | Not |
+|---|---|---|---|
+| Host UART TX → Gemstone RX (pin 10) | 4 | 4 | 921600 baud |
+| Host UART RX ← Gemstone TX (pin 8) | 5 | 5 | |
+| Acil stop döngüsü (ESTOP_LOOP) | 6 | 6 | giriş; 0 = NC buton kapalı (normal), 1 = basılı / kablo kopuk |
+| Bumper 1 / 2 | 7 / 15 | 7 / 8 | giriş, dahili pull-up |
+| GPIO header J14 | 16 / 17 | 9 / 10 | 3V3 / IO16 / IO17 / GND |
+| USB D− / D+ | 19 / 20 | 13 / 14 | USB-C, flaşlama + konsol (USB-Serial/JTAG) |
+| Motor A — PH (yön) / EN (PWM) | 9 / 10 | 17 / 18 | DRV8874 U2 |
+| Motor B — PH / EN | 11 / 12 | 19 / 20 | DRV8874 U3 |
+| Sürücü nSLEEP (ortak) | 13 | 21 | düşük = motorlar serbest |
+| Sürücü nFAULT (ortak) | 14 | 22 | açık drenaj, 10 k pull-up |
+| Acil stop sürücü (ESTOP_DRV) | 21 | 23 | 1 = motor gücünü aç; 100 k pull-down → reset'te kapalı |
+| SK6812MINI veri | 47 | 24 | 74AHCT1G125 ile 5 V'a çevrilir |
+| INA226 ALERT | 48 | 25 | 10 k pull-up |
+| BOOT butonu | 0 | 27 | strapping |
+| Enkoder A — kanal A / B | 38 / 39 | 31 / 32 | PCNT birimi 0 |
+| Enkoder B — kanal A / B | 40 / 41 | 33 / 34 | PCNT birimi 1 |
+| I2C SDA / SCL | 42 / 44 | 35 / 36 | 4.7 k pull-up (IO44 = U0RXD, boot'ta giriş) |
+| Acil stop durumu → host (pin 13) | 43 | 37 | U0TXD: boot sırasında ROM log'u basar, host bu süreyi yok saymalı |
+| Akım geri besleme A / B | 1 / 2 | 39 / 38 | ADC1_CH0 / CH1, IPROPI |
+| Boş | 8, 18 | 12, 11 | yedek |
+| Bağlı değil (strap) | 3, 45, 46 | 15, 26, 16 | boot strap pinleri |
+| **KULLANMA** | 35–37 | 28–30 | PSRAM ile paylaşımlı |
 
 ## 3. I2C adres haritası (ESP32 veri yolu)
 

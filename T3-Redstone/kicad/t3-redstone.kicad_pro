@@ -18,7 +18,7 @@
         }
       },
       "rules": {
-        "min_clearance": 0.15,
+        "min_clearance": 0.1,
         "min_track_width": 0.1,
         "min_via_diameter": 0.45,
         "min_via_annular_width": 0.1,
@@ -35,7 +35,8 @@
         "solder_mask_min_width": 0.0,
         "use_height_for_length_calcs": true,
         "allow_blind_buried_vias": false,
-        "allow_microvias": false
+        "allow_microvias": false,
+        "min_resolved_spokes": 1
       },
       "track_widths": [
         0.0,
@@ -136,6 +137,23 @@
         "bus_width": 12,
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "schematic_color": "rgba(0, 0, 0, 0.000)"
+      },
+      {
+        "name": "USB",
+        "clearance": 0.1,
+        "track_width": 0.15,
+        "via_diameter": 0.5,
+        "via_drill": 0.25,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "wire_width": 6,
+        "bus_width": 12,
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "schematic_color": "rgba(0, 0, 0, 0.000)"
       }
     ],
     "meta": {
@@ -199,6 +217,14 @@
       {
         "netclass": "Ray",
         "pattern": "+5V_USB"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "USB_DP"
+      },
+      {
+        "netclass": "USB",
+        "pattern": "USB_DM"
       }
     ]
   },

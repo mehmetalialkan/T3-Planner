@@ -69,22 +69,25 @@ P("J1", "Gemstone 40P disi", "Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_
 # =============================================================================
 # ESP32-S3-WROOM-1U  (U.FL modulun ustunde - harici anten kablosu)
 # =============================================================================
+# Pin atamasi COGRAFYAYA gore (GPIO matrisi: LEDC/MCPWM/PCNT/UART her pine atanir):
+#   sol kenar  -> sola/yukari giden: host UART (J1), acil stop butonu (J12), bumper, GPIO
+#   alt sira   -> motor surucu sinyalleri (karti boydan boya gecer), LED, INA226 ALERT
+#   sag kenar  -> enkoder, I2C, ESTOP_STAT; IPROPI ADC1 icin IO1/IO2'de kalir
 ESP = {
     "1": "GND", "2": "+3V3", "3": "EN",
-    "4": "MA_PH", "5": "MA_EN", "6": "MB_PH", "7": "MB_EN",          # IO4..IO7
-    "8": "DRV_nSLEEP", "9": "DRV_nFAULT",                             # IO15, IO16
-    "10": "GPIO17", "11": "ESTOP_LOOP", "12": "ENC_A1",              # IO17, IO18, IO8
+    "4": "HOST_RX", "5": "HOST_TX",                                   # IO4=TX -> host RX, IO5=RX
+    "6": "ESTOP_LOOP", "7": "BUMP1", "8": "BUMP2",                    # IO6, IO7, IO15
+    "9": "GPIO16", "10": "GPIO17", "11": "", "12": "",                # IO16, IO17 (J14); IO18, IO8 bos
     "13": "USB_DM", "14": "USB_DP",                                   # IO19, IO20
     "15": "", "16": "",                                               # IO3, IO46 strap - bos
-    "17": "ENC_B1", "18": "ENC_A2", "19": "ENC_B2",                  # IO9, IO10, IO11
-    "20": "ESTOP_STAT", "21": "GPIO13", "22": "PWR_ALERT",           # IO12, IO13, IO14
-    "23": "ESTOP_DRV",                                                # IO21
-    "24": "HOST_RX", "25": "HOST_TX",                                 # IO47=TX, IO48=RX
-    "26": "", "27": "BOOT_BTN",                                       # IO45 strap, IO0
+    "17": "MA_PH", "18": "MA_EN", "19": "MB_PH", "20": "MB_EN",       # IO9..IO12
+    "21": "DRV_nSLEEP", "22": "DRV_nFAULT", "23": "ESTOP_DRV",        # IO13, IO14, IO21
+    "24": "LED_DATA", "25": "PWR_ALERT", "26": "",                    # IO47, IO48, IO45 strap
+    "27": "BOOT_BTN",                                                 # IO0
     "28": "", "29": "", "30": "",                                     # IO35-37 (PSRAM) - bos
-    "31": "BUMP1", "32": "BUMP2", "33": "LED_DATA",                  # IO38, IO39, IO40
-    "34": "I2C_SDA", "35": "I2C_SCL",                                 # IO41, IO42
-    "36": "", "37": "",                                               # U0RXD/U0TXD - bos
+    "31": "ENC_A1", "32": "ENC_B1", "33": "ENC_A2", "34": "ENC_B2",  # IO38..IO41 (PCNT)
+    "35": "I2C_SDA", "36": "I2C_SCL",                                 # IO42, IO44 (U0RXD)
+    "37": "ESTOP_STAT",                                               # IO43 (U0TXD) -> host
     "38": "IPROPI_B", "39": "IPROPI_A",                               # IO2, IO1 (ADC1)
     "40": "GND", "41": "GND"}
 P("U1", "ESP32-S3-WROOM-1U-N8R2", "RF_Module:ESP32-S3-WROOM-1U", ESP,
@@ -125,11 +128,13 @@ P("Q1", "AO4407A", SO8,
    "5": "VBAT_F", "6": "VBAT_F", "7": "VBAT_F", "8": "VBAT_F"},
   mpn="AO4407A", desc="ters polarite P-FET (D=giris, S=cikis)")
 R("R5", "100k", "GND_GATE", "GND", "Q1 gate -> GND")
-P("RS1", "2m 2W", "Resistor_SMD:R_2512_6332Metric", {"1": "VBAT", "2": "VSYS"},
-  mpn="WSL2512R0020FEA", desc="akim shuntu")
+# 4 uclu (Kelvin) shunt: 1/4 akim uclari, 2/3 olcum uclari -> INA226'ya ayri netlerle
+P("RS1", "2m 3W", "Resistor_SMD:R_Shunt_Vishay_WSK2512_6332Metric_T1.19mm",
+  {"1": "VBAT", "2": "SNS_P", "3": "SNS_N", "4": "VSYS"},
+  mpn="Vishay WSK2512 2mOhm", desc="Kelvin akim shuntu")
 P("U5", "INA226", "Package_SO:VSSOP-10_3x3mm_P0.5mm",
   {"1": "+3V3", "2": "+3V3", "3": "PWR_ALERT", "4": "I2C_SDA", "5": "I2C_SCL",
-   "6": "+3V3", "7": "GND", "8": "VSYS", "9": "VSYS", "10": "VBAT"},
+   "6": "+3V3", "7": "GND", "8": "SNS_N", "9": "SNS_N", "10": "SNS_P"},
   mpn="INA226AIDGSR", desc="I2C 0x45 (A0=A1=VS)")
 C("C5", "100n", "+3V3")
 R("R15", "10k", "PWR_ALERT", "+3V3")
@@ -275,7 +280,7 @@ P("J10", "QWIIC", "Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizonta
 P("J13", "BUMPER", XH.format(n=3), {"1": "GND", "2": "BUMP1", "3": "BUMP2"},
   mpn="JST B3B-XH-A")
 P("J14", "GPIO", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
-  {"1": "+3V3", "2": "GPIO13", "3": "GPIO17", "4": "GND"}, mpn="1x4 erkek 2.54")
+  {"1": "+3V3", "2": "GPIO16", "3": "GPIO17", "4": "GND"}, mpn="1x4 erkek 2.54")
 
 for i in range(len(HOLES)):
     P(f"MH{i + 1}", "M2.5", "MountingHole:MountingHole_2.7mm_M2.5", {})
@@ -294,12 +299,12 @@ POS = {
     "MH1": (*HOLES[0], 0), "MH2": (*HOLES[1], 0), "MH3": (*HOLES[2], 0), "MH4": (*HOLES[3], 0),
     # ESP32 + cevresi
     "U1": (18.8, 39.6, 0),
-    "C4": (8.2, 47.6, 270), "R3": (8.2, 44.5, 90), "C14": (8.2, 41.4, 90),
+    "C4": (8.2, 47.6, 90), "R3": (8.2, 44.5, 90), "C14": (8.2, 41.4, 90),
     "SW1": (32.6, 42.0, 0), "SW2": (32.6, 37.6, 0),
     "J12": (3.9, 45.1, 90), "LS1": (3.9, 36.6, 90),
     # USB
     "J11": (4.2, 26.4, 270), "U10": (10.6, 26.2, 90), "R1": (10.6, 22.6, 0),
-    "R2": (10.6, 20.9, 0), "D1": (15.2, 27.9, 0),
+    "R2": (10.6, 20.9, 0), "D1": (15.2, 27.9, 180),
     # guc girisi
     "J2": (15.3, 5.0, 180), "F1": (25.9, 5.0, 90), "Q1": (31.6, 3.5, 180), "R5": (33.6, 7.3, 0),
     "RS1": (37.6, 5.0, 90), "U5": (33.0, 12.7, 0), "C5": (38.0, 12.7, 90),
@@ -308,13 +313,13 @@ POS = {
     "U7": (15.0, 13.0, 180), "C7": (10.6, 12.8, 90), "C16": (15.0, 15.6, 180),
     "C13": (15.0, 10.4, 0), "L1": (20.6, 13.0, 0), "R12": (13.6, 18.0, 180),
     "R13": (13.6, 19.7, 0), "C15": (24.7, 13.0, 90), "C6": (26.9, 13.0, 90),
-    "U6": (20.6, 21.6, 0), "C1": (20.6, 18.0, 0), "C2": (20.6, 25.0, 0), "C3": (24.8, 25.0, 90),
+    "U6": (20.6, 21.6, 0), "C1": (20.6, 18.0, 0), "C2": (20.6, 25.0, 180), "C3": (24.8, 25.0, 90),
     # buzzer surucu
     "Q4": (25.6, 18.6, 0), "D2": (25.6, 21.6, 0), "R14": (26.6, 15.9, 0),
     # orta
     "U9": (31.6, 17.4, 0), "C21": (35.4, 17.4, 90),
     "R10": (32.6, 21.0, 0), "R11": (32.6, 22.7, 0), "J13": (32.7, 29.2, 90),
-    "U4": (47.4, 26.4, 90), "C12": (54.4, 26.4, 90), "R9": (40.4, 26.4, 90),
+    "U4": (47.4, 26.4, 90), "C12": (40.7, 29.4, 180), "R9": (40.4, 26.4, 90),
     "J8A": (47.4, 44.2, 0), "J8B": (47.4, 35.2, 0),
     "DS1": (43.4, 16.6, 180), "DS2": (49.2, 16.6, 180), "DS3": (55.0, 16.6, 180), "DS4": (60.8, 16.6, 180),
     "C17": (43.4, 19.6, 0), "C18": (49.2, 19.6, 0), "C19": (55.0, 19.6, 0), "C20": (60.8, 19.6, 0),
@@ -324,8 +329,8 @@ POS = {
     # motor
     "U2": (73.4, 18.0, 90), "U3": (73.4, 6.0, 90),
     "C22": (73.9, 24.1, 0), "C24": (72.6, 22.7, 180), "R7": (67.4, 17.0, 0), "C9": (76.0, 24.4, 90),
-    "C23": (73.9, 12.1, 0), "C25": (72.6, 10.7, 180), "R8": (67.4, 5.4, 0), "C10": (76.0, 12.4, 90),
-    "J4": (80.95, 17.9, 90), "J5": (80.95, 5.9, 90),
+    "C23": (73.9, 12.1, 0), "C25": (72.6, 10.7, 180), "R8": (67.4, 5.4, 0), "C10": (75.1, 13.2, 0),
+    "J4": (80.95, 17.9, 90), "J5": (80.25, 6.9, 90),
     "Q2": (67.4, 25.1, 90), "C8": (69.4, 32.5, 0),
     # enkoder
     "U8": (73.2, 40.1, 90), "C11": (73.2, 45.3, 0), "RN1": (66.4, 40.1, 180),
@@ -352,6 +357,8 @@ NETCLASS = {
                       "OUTA1", "OUTA2", "OUTB1", "OUTB2"]),
     "Ray": dict(track=0.25, clearance=0.15, via=0.5, drill=0.25,
                 nets=["+5V", "+3V3", "GND", "SW5V", "+5V_USB"]),
+    # USB-C 0.5 mm adimli pedler (0.2 mm bosluk) arasindan cikabilsin
+    "USB": dict(track=0.15, clearance=0.1, via=0.5, drill=0.25, nets=["USB_DP", "USB_DM"]),
 }
 DEFAULT = dict(track=0.15, clearance=0.15, via=0.5, drill=0.25)
 
@@ -363,7 +370,7 @@ DEFAULT = dict(track=0.15, clearance=0.15, via=0.5, drill=0.25)
 #     +3V3    ESP32 bolgesi (sol-ust)
 #     VBAT_SW motor bolgesi (sag-alt)
 #   Yuksek akim: F.Cu dokumleri + elle cizilmis yollar. VSYS sag tarafa (Q2'ye)
-#   B.Cu 2 mm + F.Cu 1.2 mm paralel govde ile tasinir (y = 21.4).
+#   B.Cu'da 2 mm govdeyle, kamera kesitinin ustunden (y = 15.4) tasinir.
 # =============================================================================
 IN2_SPLIT = [
     ("VSYS", [(0, 0), (39.8, 0), (39.8, 11.0), (17.4, 11.0), (17.4, 20.6), (0, 20.6)]),
@@ -376,76 +383,141 @@ IN2_SPLIT = [
                  (64.4, 13.8), (57.2, 13.8)]),
 ]
 
-def _drv_pours(dy, ch):
-    """DRV8874 cikis + VM baglantilari dokum olarak (U3: dy=0, U2: dy=12).
+def _drv_pours(dy, ch, jx, j1, j2):
+    """DRV8874 cikis + VM dokumleri (U3: dy=0, U2: dy=12). (jx, j1/j2) = klemens pedleri.
     Ince pinlere (0.65 mm adim) dolgu motoru komsu pinlerden bosluk birakarak girer."""
-    def sh(poly):
-        return [(x, y + dy) for x, y in poly]
     return [
-        (f"OUT{ch}1", sh([(75.45, 1.4), (82.6, 1.4), (82.6, 4.95), (76.4, 4.95), (76.4, 4.1),
-                         (75.45, 4.1)])),
-        (f"OUT{ch}2", sh([(74.85, 8.0), (75.25, 8.0), (75.25, 9.88), (79.4, 9.88), (79.4, 6.9),
-                         (82.5, 6.9), (82.5, 11.4), (74.85, 11.4)])),
-        ("VBAT_SW", sh([(74.05, 8.0), (74.6, 8.0), (74.6, 11.6), (76.4, 11.6), (76.4, 12.55),
-                        (74.0, 12.55), (74.0, 8.0)])),
+        (f"OUT{ch}1", [(75.45, 1.4 + dy), (jx + 1.65, 1.4 + dy), (jx + 1.65, max(4.95 + dy, j1 + 1.6)),
+                       (76.4, max(4.95 + dy, j1 + 1.6)), (76.4, 4.1 + dy), (75.45, 4.1 + dy)]),
+        (f"OUT{ch}2", [(74.85, 8.0 + dy), (75.25, 8.0 + dy), (75.25, 9.88 + dy), (jx - 1.55, 9.88 + dy),
+                       (jx - 1.55, j2 - 1.55), (jx + 1.55, j2 - 1.55), (jx + 1.55, 11.4 + dy),
+                       (74.85, 11.4 + dy)]),
+        ("VBAT_SW", [(x, y + dy) for x, y in ((74.05, 8.0), (74.6, 8.0), (74.6, 11.6), (76.4, 11.6),
+                                              (76.4, 12.55), (74.0, 12.55), (74.0, 8.0))]),
     ]
 
+
+J5_PADS = (80.25, 4.36, 9.44)       # klemens ped merkezleri (x, ped1 y, ped2 y)
+J4_PADS = (80.95, 15.36, 20.44)
 
 F_POURS = [
     ("VBAT_RAW", [(15.6, 0.6), (27.75, 0.6), (27.75, 3.35), (22.3, 3.35), (22.3, 8.3), (15.6, 8.3)]),
     ("VBAT_F", [(22.8, 6.3), (28.05, 6.3), (28.05, 0.6), (30.8, 0.6), (30.8, 9.4), (22.8, 9.4)]),
-    ("VBAT", [(32.9, 0.6), (39.6, 0.6), (39.6, 4.5), (32.9, 4.5)]),
-    ("VSYS", [(35.6, 6.2), (39.6, 6.2), (39.6, 10.6), (35.6, 10.6)]),
+    # RS1 olcum pedleri (SNS_P sag-alt, SNS_N sol-ust) dokumlerin disinda kalsin
+    ("VBAT", [(32.9, 0.6), (38.15, 0.6), (38.15, 4.5), (32.9, 4.5)]),
+    ("VSYS", [(37.2, 6.2), (39.6, 6.2), (39.6, 10.6), (37.2, 10.6)]),
     ("+5V", [(21.6, 10.6), (28.2, 10.6), (28.2, 12.85), (23.3, 12.85), (23.3, 16.3), (21.6, 16.3)]),
     ("VSYS", [(15.4, 13.6), (17.4, 13.6), (17.4, 16.4), (15.4, 16.4)]),          # U7 VIN + C16
     ("VSYS", [(62.9, 20.8), (68.65, 20.8), (68.65, 23.9), (62.9, 23.9)]),
     ("VBAT_SW", [(64.6, 26.25), (70.35, 26.25), (70.35, 29.1), (68.6, 29.1), (68.6, 34.2),
                  (64.6, 34.2)]),
-] + _drv_pours(0.0, "B") + _drv_pours(12.0, "A")
+] + _drv_pours(0.0, "B", *J5_PADS) + _drv_pours(12.0, "A", *J4_PADS)
 
 
-POWER_TRACKS = (
-    [dict(net="VSYS", w=2.0, layer="B", pts=[(38.6, 9.7), (38.6, 21.4), (63.4, 21.4)]),
-     dict(net="VSYS", w=1.2, pts=[(38.6, 21.4), (63.4, 21.4)]),
-     # INA226 Kelvin: IN+ dogrudan RS1.1 yanina, IN-/VBUS RS1.2 yanina
-     dict(net="VBAT", w=0.25, pts=[(35.2, 13.7), (36.4, 13.7)]),
-     dict(net="VBAT", w=0.25, layer="B", pts=[(36.4, 13.7), (36.4, 3.6)]),
-     dict(net="VSYS", w=0.25, pts=[(35.2, 13.2), (35.2, 12.7), (36.3, 12.7), (36.3, 9.0)]),
+def _spine(net, w, *pts):
+    return dict(net=net, w=w, pts=list(pts))
+
+
+def _drv_spines(dy, ch, jx, j1, j2):
+    o1, o2 = f"OUT{ch}1", f"OUT{ch}2"
+    return [
+        _spine(o1, 0.4, (75.67, 3.14 + dy), (76.6, 3.14 + dy)),
+        _spine(o1, 1.0, (76.6, 3.14 + dy), (jx, j1)),
+        _spine(o2, 0.4, (75.03, 8.86 + dy), (75.03, 10.6 + dy)),
+        _spine(o2, 0.8, (75.43, 10.6 + dy), (jx, 10.6 + dy)),   # bas: VM omurgasindan 0.2+
+        _spine(o2, 1.0, (jx, 10.6 + dy), (jx, j2)),
+        _spine("VBAT_SW", 0.3, (74.38, 8.86 + dy), (74.38, 12.1 + dy)),
+        _spine("VBAT_SW", 0.4, (74.38, 12.1 + dy), (75.95, 12.1 + dy)),
+    ]
+
+
+# Dokum "omurgalari": her F.Cu guc dokumunun ortasinda ayni netten kilitli yol.
+# Freerouting dokumleri diger netler icin engel saymiyor (icinden yol geciriyor);
+# sabit yollari ise engel sayar. KiCad'de dokumu guclendiren gercek bakirdir.
+SPINES = [
+    _spine("VBAT_RAW", 1.6, (18.9, 2.1), (25.9, 2.1)),
+    _spine("VBAT_F", 1.0, (25.9, 7.9), (29.12, 7.9), (29.12, 1.59)),
+    _spine("VBAT", 1.0, (34.08, 2.86), (36.97, 2.02)),
+    _spine("VSYS", 0.8, (38.23, 7.98), (38.6, 9.7)),
+    _spine("VSYS", 0.8, (63.4, 21.4), (64.2, 22.0), (68.03, 22.0)),
+    _spine("VBAT_SW", 0.8, (65.5, 27.58), (69.31, 27.58)),
+    _spine("VBAT_SW", 1.0, (66.3, 27.58), (66.3, 32.5)),
+    _spine("+5V", 0.8, (22.45, 12.05), (26.9, 12.05)),
+    _spine("VSYS", 0.5, (16.14, 13.95), (16.9, 15.0), (16.9, 15.75)),
+] + _drv_spines(0.0, "B", *J5_PADS) + _drv_spines(12.0, "A", *J4_PADS)
+
+POWER_TRACKS = SPINES + (
+    # VSYS -> Q2 govdesi yalnizca B.Cu'da ve kamera kesitinin hemen ustunden: F.Cu
+    # tamamen serbest, B.Cu'da da karti bolen bir duvar olusturmuyor (alti bos serit)
+    [dict(net="VSYS", w=2.0, layer="B", pts=[(38.6, 9.7), (38.6, 15.4), (63.0, 15.4), (63.0, 21.4),
+                                              (63.4, 21.4)]),
      # BEC geri besleme ust direnci -> +5V (C1)
-     dict(net="+5V", w=0.3, pts=[(14.42, 18.0), (19.65, 18.0)])]
+     dict(net="+5V", w=0.3, pts=[(14.42, 18.0), (19.65, 18.0)]),
+     # USB 5V (D1 katodu) -> LDO girisi: D1 +3V3 bolgesinde, +5V'a ayri yol
+     dict(net="+5V", w=0.4, pts=[(16.85, 27.9), (17.6, 27.15), (17.6, 23.3), (18.35, 22.55),
+                                 (19.46, 22.55)]),
+     # U3 VM dekuplaji (C10) -> VM omurgasi
+     dict(net="VBAT_SW", w=0.3, pts=[(74.62, 13.2), (74.62, 12.1)]),
+     # +3V3 omurgasi: LDO cikisindan (C3) orta bolgeye; +3V3 duzlemi yalnizca solda,
+     # sagdaki tuketiciler (PCA9685, INA226, 74LVC245, VREF, I2C, Qwiic) buna baglanir.
+     # B.Cu'da: suruculere giden sinyaller F.Cu'da hem bunun hem VSYS govdesinin
+     # ustunden via'siz gecebilir.
+     # LDO cikisi: U6.5 -> C2 (cikis kondansatoru) -> C3 -> omurga basi / duzlem viasi
+     dict(net="+3V3", w=0.4, pts=[(21.74, 22.55), (21.55, 25.0), (22.5, 24.05), (24.8, 24.05)]),
+     dict(net="+3V3", w=0.5, pts=[(24.8, 24.05), (25.3, 23.8), (26.4, 23.8)]),
+     dict(net="+3V3", w=0.4, layer="B", pts=[(26.4, 23.8), (36.5, 23.8), (38.9, 21.4), (58.0, 21.4)]),
+     # omurga ucu -> sag bolge (R17 uzerinden enkoder tamponu, VREF, Qwiic, J14)
+     dict(net="+3V3", w=0.3, layer="B", pts=[(58.0, 21.4), (58.0, 29.5), (59.0, 30.5), (62.3, 30.5)]),
+     dict(net="+3V3", w=0.3, pts=[(61.42, 30.5), (62.3, 30.5)]),
+     # U1 3V3 dekuplaji: C4 pin 1 (3V3) U1 pin 2'nin, C4 pin 2 (GND) U1 pin 1'in yaninda
+     dict(net="+3V3", w=0.3, pts=[(10.05, 46.97), (8.2, 46.82), (7.1, 46.82)]),
+     dict(net="GND", w=0.3, pts=[(10.05, 48.23), (8.2, 48.38)]),
+     # PCA9685 VDD dekuplaji; omurgadan B.Cu kolla beslenir
+     dict(net="+3V3", w=0.3, pts=[(41.475, 29.26), (43.17, 29.26)]),
+     dict(net="+3V3", w=0.3, pts=[(41.3, 28.3), (41.475, 29.26)]),
+     dict(net="+3V3", w=0.3, layer="B", pts=[(41.3, 21.4), (41.3, 28.3)]),
+     # I2C pull-up'lari (R10, R11) dogrudan omurgaya
+     dict(net="+3V3", w=0.3, pts=[(33.42, 21.0), (33.42, 23.8)]),
+     # LED +5V: pedlerin altinda kesit + VSYS govdesi var, via konamaz. DS1..DS4'un +5V
+     # pinleri kesitin ustundeki F.Cu raydan birlesir, ray DS1'in solundan C17'ye cikar
+     dict(net="+5V", w=0.3, pts=[(41.65, 15.72), (40.4, 15.72), (40.4, 18.9), (41.1, 19.6),
+                                 (42.62, 19.6)]),
+     dict(net="+5V", w=0.3, pts=[(41.65, 15.72), (41.65, 14.8), (59.05, 14.8), (59.05, 15.72)]),
+     dict(net="+5V", w=0.3, pts=[(47.45, 14.8), (47.45, 15.72)]),
+     dict(net="+5V", w=0.3, pts=[(53.25, 14.8), (53.25, 15.72)]),
+     # EN pull-up (R3) 3V3 ucu dogrudan C4'e
+     dict(net="+3V3", w=0.3, pts=[(8.2, 45.33), (8.2, 46.82)]),
+     # INA226 A0 = A1 = VS (0x45): pinler soldan via ile B.Cu'ya, oradan +3V3 omurgasina
+     dict(net="+3V3", w=0.2, pts=[(30.8, 13.7), (30.8, 13.2)]),
+     dict(net="+3V3", w=0.2, pts=[(30.8, 13.45), (29.5, 13.45)]),
+     dict(net="+3V3", w=0.25, layer="B", pts=[(29.5, 13.45), (29.5, 23.8)]),
+     # USBLC6 GND: pedin cevresi USB yollariyla cevrili, via govdenin altinda
+     dict(net="GND", w=0.3, pts=[(10.6, 25.06), (10.6, 26.2)])]
 )
 
 POWER_VIAS = [
     # (36.5, 9.7) YOK: B.Cu'daki VBAT Kelvin yolu x=36.4'ten geciyor
-    dict(net="VSYS", at=[(37.6, 9.7), (38.6, 9.7), (38.6, 21.4), (39.6, 21.4),
-                         (63.4, 21.4), (63.4, 22.6)]),
-    dict(net="VBAT", at=[(36.4, 3.6)], size=0.6, drill=0.3),
-    dict(net="VBAT", at=[(36.4, 13.7)], size=0.6, drill=0.3),
+    dict(net="VSYS", at=[(37.6, 9.7), (38.6, 9.7), (63.4, 21.4), (63.4, 22.6)]),
     dict(net="VBAT_SW", at=[(65.3, 29.9), (66.3, 29.9), (67.3, 29.9),
                             (65.3, 30.8), (66.3, 30.8), (67.3, 30.8)]),
     dict(net="VBAT_SW", at=[(75.2, 12.1), (75.95, 12.1), (75.2, 24.1), (75.95, 24.1)],
          size=0.6, drill=0.3),
     dict(net="+5V", at=[(25.8, 12.0), (23.6, 12.0), (22.45, 15.75)]),
     dict(net="VSYS", at=[(16.9, 15.75)], size=0.6, drill=0.3),
+    dict(net="+3V3", at=[(7.1, 46.82), (26.4, 23.8), (29.5, 13.45), (41.3, 28.3),
+                         (33.42, 23.8), (62.3, 30.5)], size=0.5, drill=0.25),
+    dict(net="+5V", at=[(41.1, 19.6)], size=0.5, drill=0.25),
+    dict(net="GND", at=[(10.6, 26.2)], size=0.5, drill=0.25),
 ]
 
 # (metin, x, y, boyut, kalinlik[, katman])  - katman yoksa F.SilkS
 SILK = [
     ("SERVO 1-8   S + -", 36.9, 49.0, 0.8, 0.13),
-    ("SERVO 9-16", 36.9, 30.0, 0.8, 0.13),
-    ("MOTOR A", 76.6, 23.0, 0.8, 0.13),
-    ("MOTOR B", 76.6, 0.6, 0.8, 0.13),
-    ("XT60 2S 6-8.4V", 8.0, 9.9, 0.8, 0.13),
-    ("+", 21.8, 1.2, 1.2, 0.2),
-    ("GEMSTONE GUC", 0.6, 9.6, 0.7, 0.12),
-    ("USB", 0.8, 32.2, 0.7, 0.12),
-    ("BUZZER", 0.8, 32.9, 0.7, 0.12),
-    ("ACIL STOP NC", 0.6, 40.2, 0.7, 0.12),
-    ("ENK A", 78.3, 50.0, 0.7, 0.12),
-    ("ENK B", 78.3, 36.0, 0.7, 0.12),
+    ("9-16", 36.35, 30.2, 0.7, 0.12),
+    ("MOTOR A", 76.6, 23.4, 0.8, 0.13),
+    ("MOTOR B", 70.8, 0.55, 0.6, 0.1),
+    ("2S 6-8.4V", 7.2, 9.75, 0.6, 0.1),
+    ("ENK A", 78.3, 50.6, 0.7, 0.12),
+    ("ENK B", 78.3, 36.4, 0.7, 0.12),
     ("QWIIC", 74.2, 49.5, 0.7, 0.12),
-    ("BUMPER", 29.3, 34.9, 0.7, 0.12),
-    ("GPIO 3V3 13 17 GND", 58.9, 43.2, 0.6, 0.1),
-    ("BOOT", 35.7, 41.6, 0.7, 0.12),
-    ("RST", 35.7, 37.2, 0.7, 0.12),
 ]

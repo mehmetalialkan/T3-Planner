@@ -68,14 +68,17 @@ for z in [z for z in board.Zones() if z.GetZoneName() in ("GND_F", "GND_B")]:
     board.Delete(z)
 
 PRE = os.path.join(WORK, "pre-route.kicad_pcb")
-pcbnew.SaveBoard(PRE, board)
 
-if "--no-route" not in sys.argv:
-    # F.Cu guc dokumleri DSN'e cerceveleriyle degil DOLGU sekilleriyle gitsin: cerceve
-    # komsu pinlerin ustunden gecebilir (dolgu motoru orada bosluk birakir), Freerouting
-    # ise cerceveyi kati bakir sanar ve hem ihlal sayar hem de etrafindan dolasamaz.
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
-    for z in board.Zones():
+def freeroute(src, dsn, ses, passes, logname, optimize=True):
+    """src kartini DSN'e aktar, Freerouting'i calistir. F.Cu guc dokumleri DSN'e
+    cerceveleriyle degil DOLGU sekilleriyle gider: cerceve komsu pinlerin ustunden
+    gecebilir (dolgu motoru orada bosluk birakir), Freerouting ise cerceveyi kati
+    bakir sanar. GND yuzey dokumleri DSN'e girmez (her yeri kaplar)."""
+    b_ = pcbnew.LoadBoard(src)
+    for z in [z for z in b_.Zones() if z.GetZoneName() in ("GND_F", "GND_B")]:
+        b_.Delete(z)
+    pcbnew.ZONE_FILLER(b_).Fill(b_.Zones())
+    for z in b_.Zones():
         if z.GetZoneName().startswith("F_"):
             fill = z.GetFilledPolysList(pcbnew.F_Cu)
             shape = pcbnew.SHAPE_POLY_SET()
@@ -85,83 +88,103 @@ if "--no-route" not in sys.argv:
                 z.Outline().RemoveAllContours()
                 for i in range(shape.OutlineCount()):
                     z.Outline().AddOutline(shape.Outline(i))
-    assert pcbnew.ExportSpecctraDSN(board, DSN), "DSN yazilamadi"
-    if os.path.exists(SES):
-        os.remove(SES)
-    cmd = [JAVA, "-jar", JAR, "-de", DSN, "-do", SES, "-mp", PASSES,
+    assert pcbnew.ExportSpecctraDSN(b_, dsn), "DSN yazilamadi"
+    if os.path.exists(ses):
+        os.remove(ses)
+    cmd = [JAVA, "-jar", JAR, "-de", dsn, "-do", ses, "-mp", passes,
            "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"]
+    if not optimize:
+        cmd.append("--router.optimizer.enabled=false")
     print("freerouting:", " ".join(cmd[2:]), flush=True)
-    with open(os.path.join(WORK, "freerouting.log"), "w") as logf:
+    with open(os.path.join(WORK, logname), "w") as logf:
         subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT)
-    if not os.path.exists(SES):
-        sys.exit("Freerouting SES uretmedi - build/freerouting.log")
+    if not os.path.exists(ses):
+        if logname == "freerouting.log":
+            sys.exit(f"Freerouting SES uretmedi - build/{logname}")
+        print(f"UYARI: Freerouting SES uretmedi - build/{logname}")
 
-board = pcbnew.LoadBoard(PRE)
+
+
 
 # ------------------------------------------------------------------- SES -> kart
-ses = sexp(open(SES).read())
-routes = find(ses, "routes")[0]
-res = find(routes, "resolution")[0]           # (resolution um 10)
-scale = 1.0 / float(res[2])                    # birim -> um
-padstacks = {}
-for ps in find(find(routes, "library_out")[0], "padstack") if find(routes, "library_out") else []:
-    m = re.search(r"_(\d+):(\d+)_um", ps[1])
-    padstacks[ps[1]] = (int(m.group(1)), int(m.group(2))) if m else (600, 300)
-
-existing = set()
-for t in board.GetTracks():
-    if t.GetClass() == "PCB_TRACK":
-        a, b = t.GetStart(), t.GetEnd()
-        existing.add((t.GetNetname(), t.GetLayer(), a.x, a.y, b.x, b.y))
+def seg_dist(p, a, b):
+    ax, ay, bx, by = a.x, a.y, b.x, b.y
+    dx, dy = bx - ax, by - ay
+    t = 0.0 if dx == dy == 0 else max(0.0, min(1.0, ((p.x - ax) * dx + (p.y - ay) * dy) / (dx * dx + dy * dy)))
+    return ((p.x - ax - t * dx) ** 2 + (p.y - ay - t * dy) ** 2) ** 0.5
 
 
-def ses_pt(x, y):
-    """SES (um * res, Y yukari, sayfa) -> KiCad nm"""
-    return pcbnew.VECTOR2I(int(round(float(x) * scale * 1000)), int(round(-float(y) * scale * 1000)))
+def import_ses(path):
+    """SES'teki yol/via'lari karta ekle; kartta zaten olanlari (ayni net, ayni katman,
+    mevcut bir yolun ustunde kalan parca / ayni yerdeki via) atla."""
+    ses = sexp(open(path).read())
+    routes = find(ses, "routes")[0]
+    res = find(routes, "resolution")[0]           # (resolution um 10)
+    scale = 1.0 / float(res[2])                    # birim -> um
+    padstacks = {}
+    for ps in find(find(routes, "library_out")[0], "padstack") if find(routes, "library_out") else []:
+        m = re.search(r"_(\d+):(\d+)_um", ps[1])
+        padstacks[ps[1]] = (int(m.group(1)), int(m.group(2))) if m else (600, 300)
+    segs = {}
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK":
+            segs.setdefault((t.GetNetname(), t.GetLayer()), []).append((t.GetStart(), t.GetEnd()))
+    vias = [o.GetPosition() for o in board.GetTracks() if o.GetClass() == "PCB_VIA"]
 
+    def pt(x, y):
+        """SES (um * res, Y yukari, sayfa) -> KiCad nm"""
+        return pcbnew.VECTOR2I(int(round(float(x) * scale * 1000)), int(round(-float(y) * scale * 1000)))
 
-n_wire = n_via = 0
-for net in find(find(routes, "network_out")[0], "net"):
-    name = net[1]
-    ni = board.FindNet(name)
-    if ni is None:
-        print("UYARI: SES'te bilinmeyen net", name)
-        continue
-    for w in find(net, "wire"):
-        if find(w, "type") and find(w, "type")[0][1] in ("fix", "protect"):
+    def covered(name, layer, a, b):
+        for s0, s1 in segs.get((name, layer), ()):
+            if seg_dist(a, s0, s1) < 1000 and seg_dist(b, s0, s1) < 1000:
+                return True
+        return False
+
+    n_wire = n_via = 0
+    for net in find(find(routes, "network_out")[0], "net"):
+        name = net[1]
+        ni = board.FindNet(name)
+        if ni is None:
+            print("UYARI: SES'te bilinmeyen net", name)
             continue
-        path = find(w, "path")[0]
-        layer = board.GetLayerID(path[1])
-        width = int(round(float(path[2]) * scale * 1000))
-        pts = [ses_pt(path[i], path[i + 1]) for i in range(3, len(path) - 1, 2)]
-        for a, b in zip(pts, pts[1:]):
-            key = (name, layer, a.x, a.y, b.x, b.y)
-            if key in existing or (name, layer, b.x, b.y, a.x, a.y) in existing:
+        for w in find(net, "wire"):
+            if find(w, "type") and find(w, "type")[0][1] in ("fix", "protect"):
                 continue
-            t = pcbnew.PCB_TRACK(board)
-            t.SetStart(a)
-            t.SetEnd(b)
-            t.SetWidth(width)
-            t.SetLayer(layer)
-            t.SetNet(ni)
-            board.Add(t)
-            n_wire += 1
-    for v in find(net, "via"):
-        if find(v, "type") and find(v, "type")[0][1] in ("fix", "protect"):
-            continue
-        dia, drill = padstacks.get(v[1], (600, 300))
-        pos = ses_pt(v[2], v[3])
-        if any(abs(o.GetPosition().x - pos.x) < 50000 and abs(o.GetPosition().y - pos.y) < 50000
-               for o in board.GetTracks() if o.GetClass() == "PCB_VIA"):
-            continue                                   # kilitli guc viasinin kopyasi
-        via = pcbnew.PCB_VIA(board)
-        via.SetPosition(pos)
-        via.SetWidth(int(dia * 1000))
-        via.SetDrill(int(drill * 1000))
-        via.SetNet(ni)
-        board.Add(via)
-        n_via += 1
-print(f"SES: {n_wire} yol parcasi, {n_via} via eklendi")
+            path_ = find(w, "path")[0]
+            layer = board.GetLayerID(path_[1])
+            width = int(round(float(path_[2]) * scale * 1000))
+            pts = [pt(path_[i], path_[i + 1]) for i in range(3, len(path_) - 1, 2)]
+            for a, b in zip(pts, pts[1:]):
+                if covered(name, layer, a, b):
+                    continue
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(a)
+                t.SetEnd(b)
+                t.SetWidth(width)
+                t.SetLayer(layer)
+                t.SetNet(ni)
+                board.Add(t)
+                segs.setdefault((name, layer), []).append((a, b))
+                n_wire += 1
+        for v in find(net, "via"):
+            if find(v, "type") and find(v, "type")[0][1] in ("fix", "protect"):
+                continue
+            dia, drill = padstacks.get(v[1], (600, 300))
+            pos = pt(v[2], v[3])
+            if any(abs(o.x - pos.x) < 50000 and abs(o.y - pos.y) < 50000 for o in vias):
+                continue
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pos)
+            via.SetWidth(int(dia * 1000))
+            via.SetDrill(int(drill * 1000))
+            via.SetNet(ni)
+            board.Add(via)
+            vias.append(pos)
+            n_via += 1
+    print(f"SES: {n_wire} yol parcasi, {n_via} via eklendi")
+
+
 
 # ---------------------------------------------------------------- engel denetimi
 OUTLINE = [(0, 0), (D.CUT["x1"], 0), (D.CUT["x1"], D.CUT["depth"]), (D.CUT["x2"], D.CUT["depth"]),
@@ -169,13 +192,6 @@ OUTLINE = [(0, 0), (D.CUT["x1"], 0), (D.CUT["x1"], D.CUT["depth"]), (D.CUT["x2"]
 gnd = board.FindNet("GND")
 VIA_D, VIA_DR, GAP = 0.5, 0.25, 0.2
 COPPER = (pcbnew.F_Cu, pcbnew.B_Cu)
-
-
-def seg_dist(p, a, b):
-    ax, ay, bx, by = a.x, a.y, b.x, b.y
-    dx, dy = bx - ax, by - ay
-    t = 0.0 if dx == dy == 0 else max(0.0, min(1.0, ((p.x - ax) * dx + (p.y - ay) * dy) / (dx * dx + dy * dy)))
-    return ((p.x - ax - t * dx) ** 2 + (p.y - ay - t * dy) ** 2) ** 0.5
 
 
 def board_xy(p):
@@ -198,9 +214,11 @@ def on_board(p, margin=0.6):
 
 def point_clear(p, r, net, layers=COPPER, courtyard=False, own_pad=None):
     """p etrafinda r yaricapli bakir, 'net' disindaki her seyden GAP uzakta mi?"""
+    # SWIG her cagrida yeni sarmalayici dondurur: 'is' hic eslesmez, UUID karsilastir
+    own = own_pad.m_Uuid.AsString() if own_pad is not None else None
     for fp in board.GetFootprints():
         for q in fp.Pads():
-            if q is own_pad:
+            if own is not None and q.m_Uuid.AsString() == own:
                 continue
             if not any(q.IsOnLayer(lay) for lay in layers) and q.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH:
                 continue
@@ -314,6 +332,48 @@ def attached(q):
                 z.Outline().Collide(q.GetPosition()):
             return True
     return False
+
+
+# ------------------------------------------- yonlendirme ONCESI pasiflerin fanout'u
+# Freerouting duzlem netlerinin fanout'unu her calismada farkli pinlerde atliyor ve
+# sinyaller sonra o pinin etrafini kapatiyor. Pasiflerin (R/C/D/L/RN) guc pinleri bos
+# kartta duzleme indirilir; bu yol/via'lar Freerouting'e sabit gider, sonra kilitleri
+# acilir (bir sonraki calismada silinip yeniden uretilsinler).
+PASSIVE = re.compile(r"(R|C|D|L|RN)\d+$")
+prefan = []
+for fp in board.GetFootprints():
+    if not PASSIVE.match(fp.GetReference()):
+        continue
+    for q in fp.Pads():
+        if q.GetAttribute() == pcbnew.PAD_ATTRIB_SMD and q.GetNetname() in PLANE_NETS and \
+                q.GetNetname() and not attached(q):
+            before = {t.m_Uuid.AsString() for t in board.GetTracks()}
+            if fanout(q) or fanout(q, via_d=0.45, via_dr=0.2):
+                for t in [t for t in board.GetTracks() if t.m_Uuid.AsString() not in before]:
+                    t.SetLocked(True)
+                    prefan.append((t.GetClass(), t.GetPosition().x, t.GetPosition().y,
+                                   t.GetStart().x, t.GetStart().y, t.GetEnd().x, t.GetEnd().y))
+print(f"yonlendirme oncesi fanout: {sum(1 for p_ in prefan if p_[0] == 'PCB_VIA')} via")
+pcbnew.SaveBoard(PRE, board)
+
+if "--no-route" not in sys.argv:
+    freeroute(PRE, DSN, SES, PASSES, "freerouting.log")
+
+board = pcbnew.LoadBoard(PRE)
+gnd = board.FindNet("GND")
+import_ses(SES)
+# Freerouting ince pinlerde yolu 0.1 mm'nin altina indirebiliyor (uretilebilirlik)
+for t in board.GetTracks():
+    if t.GetClass() == "PCB_TRACK" and t.GetWidth() < MM(0.1):
+        t.SetWidth(MM(0.1))
+
+
+def unlock_prefan():
+    keys = set(prefan)
+    for t in board.GetTracks():
+        if (t.GetClass(), t.GetPosition().x, t.GetPosition().y, t.GetStart().x, t.GetStart().y,
+                t.GetEnd().x, t.GetEnd().y) in keys:
+            t.SetLocked(False)
 
 
 n_fan = n_fail = 0
@@ -466,6 +526,130 @@ def repair_group(net, pos, pad=None):
     return False
 
 
+def _lerp(a, b, t):
+    return pcbnew.VECTOR2I(int(a.x + (b.x - a.x) * t), int(a.y + (b.y - a.y) * t))
+
+
+def _dist(a, b):
+    return ((a.x - b.x) ** 2 + (a.y - b.y) ** 2) ** 0.5
+
+
+def _proj(p, a, b):
+    dx, dy = b.x - a.x, b.y - a.y
+    if dx == dy == 0:
+        return a
+    t = max(0.0, min(1.0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)))
+    return _lerp(a, b, t)
+
+
+def copper_clear(p, r, net, layers):
+    """p etrafinda r yaricapli bakir baska netlerden GAP uzakta mi? (ayni net serbest)"""
+    if not on_board(p):
+        return False
+    gap = MM(GAP)
+    for fp in board.GetFootprints():
+        for q in fp.Pads():
+            if q.GetNetname() == net and q.GetNetname():
+                continue
+            if any(q.IsOnLayer(lay) for lay in layers) or q.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
+                if q.HitTest(p, int(r + gap)):
+                    return False
+    for t in board.GetTracks():
+        if t.GetNetname() == net:
+            continue
+        if t.GetClass() == "PCB_VIA":
+            if _dist(t.GetPosition(), p) < t.GetWidth() / 2 + r + gap:
+                return False
+        elif t.GetLayer() in layers and seg_dist(p, t.GetStart(), t.GetEnd()) < t.GetWidth() / 2 + r + gap:
+            return False
+    for z in board.Zones():
+        if z.GetNetname() != net and z.GetZoneName() not in ("GND_F", "GND_B") and \
+                any(z.IsOnLayer(lay) for lay in layers) and z.Outline().Collide(p, int(r + gap)):
+            return False
+    return True
+
+
+def _anchors(tracks, pads):
+    """(katman, a, b, yari_genislik) - via iki katmanda da nokta."""
+    out = []
+    for t in tracks:
+        if t.GetClass() == "PCB_VIA":
+            out += [(lay, t.GetPosition(), t.GetPosition(), t.GetWidth() / 2) for lay in COPPER]
+        else:
+            out.append((t.GetLayer(), t.GetStart(), t.GetEnd(), t.GetWidth() / 2))
+    for q in pads:
+        out += [(lay, q.GetPosition(), q.GetPosition(), 0) for lay in COPPER if q.IsOnLayer(lay)]
+    return out
+
+
+def join_groups(net, a_pos, a_pad, b_pos, b_pad, max_bridge=2.0):
+    """Ayni netin iki kopuk parcasini bagla: farkli katmanda ust uste geliyorlarsa
+    kesisime via, ayni katmanda yakinsa kisa duz yol."""
+    ta, pa = group_of(net, [a_pos], [a_pad] if a_pad else [])
+    tb, pb = group_of(net, [b_pos], [b_pad] if b_pad else [])
+    def uid(o):
+        return o.m_Uuid.AsString()
+    if not (ta or pa) or not (tb or pb) or {uid(o) for o in ta + pa} & {uid(o) for o in tb + pb}:
+        return False
+    A, B = _anchors(ta, pa), _anchors(tb, pb)
+    w = MM(0.25 if net in PLANE_NETS else 0.15)
+    best = None                                       # (maliyet, tur, katman, p, q)
+    for la, a1, a2, wa in A:
+        n = max(1, int(_dist(a1, a2) / MM(0.05)))
+        for lb, b1, b2, wb in B:
+            for i in range(n + 1):
+                p = _lerp(a1, a2, i / n)
+                q = _proj(p, b1, b2)
+                d = _dist(p, q)
+                if la != lb and d < MM(0.05):
+                    c = (0, "via", None, p, q)
+                elif la == lb and d < MM(max_bridge):
+                    c = (d, "yol", la, p, q)
+                else:
+                    continue
+                if best is None or c[0] < best[0]:
+                    if c[1] == "via":
+                        if not any(copper_clear(p, MM(dd / 2), net, COPPER) for dd in (VIA_D, 0.45)):
+                            continue
+                    else:
+                        if not all(copper_clear(_lerp(p, q, k / 20), w / 2, net, (la,)) for k in range(21)):
+                            continue
+                    best = c
+            if best and best[0] == 0:
+                break
+        if best and best[0] == 0:
+            break
+    if best is None:
+        return False
+    _, kind, lay, p, q = best
+    if kind == "via":
+        d, dr = (VIA_D, VIA_DR) if copper_clear(p, MM(VIA_D / 2), net, COPPER) else (0.45, 0.2)
+        add_via(net, p, d, dr)
+    else:
+        tr = pcbnew.PCB_TRACK(board)
+        tr.SetStart(p)
+        tr.SetEnd(q)
+        tr.SetWidth(w)
+        tr.SetLayer(lay)
+        tr.SetNet(board.FindNet(net))
+        board.Add(tr)
+    return True
+
+
+def _item(what, x, y):
+    """DRC satiri -> (net, anahtar, ped, konum) ya da None"""
+    pos = pcbnew.VECTOR2I(MM(x), MM(y))
+    m_pad = re.match(r"(?:PTH )?[Pp]ad (\S+) \[([^\]]*)\] of (\S+)", what)
+    m_trk = re.match(r"(?:Track|Via) \[([^\]]*)\]", what)
+    if m_pad:
+        pads_ = find_pad(m_pad.group(3), m_pad.group(1))
+        pad_ = pads_[0] if pads_ else None
+        return m_pad.group(2), (m_pad.group(3), m_pad.group(1)), pad_, pad_.GetPosition() if pad_ else pos
+    if m_trk:
+        return m_trk.group(1), (round(x, 2), round(y, 2)), None, pos
+    return None
+
+
 def stitch_islands():
     """Via'siz GND yuzey adacigina adanin icinde bir via koy."""
     added = 0
@@ -502,40 +686,63 @@ def stitch_islands():
     return added
 
 
-for it in range(4):
-    rpt = drc()
-    n_isl = stitch_islands()
-    fixed = 0
-    seen = set()
-    for blk in rpt.split("[unconnected_items]")[1:]:
-        blk = blk.split("\n[")[0]
-        for kind, num, net, ref, x, y in re.findall(
-                r"@\(([\d.]+) mm, ([\d.]+) mm\): (?:(PTH pad|Pad) (\S+) \[([^\]]*)\] of (\S+)|Track \[([^\]]*)\])",
-                blk) and [] or []:
-            pass
-        for line in re.findall(r"@\(([\d.]+) mm, ([\d.]+) mm\): (.*)", blk):
-            x, y, what = float(line[0]), float(line[1]), line[2]
-            pos = pcbnew.VECTOR2I(MM(x), MM(y))
-            m_pad = re.match(r"(?:PTH )?[Pp]ad (\S+) \[([^\]]*)\] of (\S+)", what)
-            m_trk = re.match(r"Track \[([^\]]*)\]", what)
-            if m_pad:
-                net, key = m_pad.group(2), (m_pad.group(3), m_pad.group(1))
-                pads_ = find_pad(m_pad.group(3), m_pad.group(1))
-                pad_ = pads_[0] if pads_ else None
-            elif m_trk:
-                net, key, pad_ = m_trk.group(1), (round(x, 2), round(y, 2)), None
-            else:
-                continue
-            if net not in PLANE_NETS or key in seen:
-                continue
-            seen.add(key)
-            if repair_group(net, pad_.GetPosition() if pad_ else pos, pad_):
-                fixed += 1
-    print(f"onarim turu {it + 1}: {fixed} grup duzleme baglandi, {n_isl} GND adaciga via")
-    if not fixed and not n_isl:
-        break
-rpt = drc()
+def repair_loop():
+    rpt = ''
+    for it in range(4):
+        rpt = drc()
+        n_isl = stitch_islands()
+        fixed = 0
+        seen = set()
+        joined = 0
+        for blk in rpt.split("[unconnected_items]")[1:]:
+            blk = blk.split("\n[")[0]
+            items = [_item(w_, float(x_), float(y_))
+                     for x_, y_, w_ in re.findall(r"@\(([\d.]+) mm, ([\d.]+) mm\): (.*)", blk)]
+            # once iki parcayi dogrudan birlestirmeyi dene (GND disinda: GND adalari ayri)
+            if len(items) == 2 and all(items) and items[0][0] == items[1][0] != "GND" and \
+                    items[0][1] not in seen and items[1][1] not in seen:
+                (net, ka, pa_, qa), (_, kb, pb_, qb) = items
+                if join_groups(net, qa, pa_, qb, pb_):
+                    seen.update((ka, kb))
+                    joined += 1
+                    continue
+            for it_ in items:
+                if not it_:
+                    continue
+                net, key, pad_, pos = it_
+                if net not in PLANE_NETS or key in seen:
+                    continue
+                seen.add(key)
+                if repair_group(net, pos, pad_):
+                    fixed += 1
+        fixed += joined
+        print(f"onarim turu {it + 1}: {fixed - joined} grup duzleme baglandi, {joined} parca "
+              f"birlestirildi, {n_isl} GND adaciga via")
+        if not fixed and not n_isl:
+            break
+    return drc()
 
+
+rpt = repair_loop()
+n_unc = int((re.findall(r"Found (\d+) unconnected pads", rpt) or ["0"])[0])
+SES2 = os.path.join(WORK, "t3-redstone-2.ses")
+if n_unc and "--no-route" in sys.argv and os.path.exists(SES2):
+    import_ses(SES2)                                   # onceki ikinci turun sonucu
+    rpt = repair_loop()
+elif n_unc and "--ikinci-tur" in sys.argv:
+    # ikinci tur: mevcut yollar yerinde, Freerouting yalnizca eksikleri tamamlar
+    print(f"{n_unc} bagsiz ped -> ikinci Freerouting turu", flush=True)
+    MID = os.path.join(WORK, "mid-route.kicad_pcb")
+    pcbnew.SaveBoard(MID, board)
+    freeroute(MID, os.path.join(WORK, "t3-redstone-2.dsn"), SES2, "20", "freerouting2.log",
+              optimize=False)
+    if os.path.exists(SES2):
+        board = pcbnew.LoadBoard(MID)
+        gnd = board.FindNet("GND")
+        import_ses(SES2)
+        rpt = repair_loop()
+
+unlock_prefan()
 pcbnew.SaveBoard(PCB, board)
 
 # --------------------------------------------------------------------------- DRC

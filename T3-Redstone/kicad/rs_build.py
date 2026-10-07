@@ -115,6 +115,7 @@ OUTLINE = [(0, 0), (cu["x1"], 0), (cu["x1"], cu["depth"]), (cu["x2"], cu["depth"
 # --------------------------------------------------------------------- footprintler
 LOCAL = make_local_footprints()
 FP = {}
+FP_REF_AT = {}
 
 
 def libpath(lib):
@@ -186,10 +187,23 @@ for p in D.PARTS:
     ref = fp.Reference()
     ref.SetTextSize(pcbnew.VECTOR2I(MM(0.8), MM(0.8)))
     ref.SetTextThickness(MM(0.12))
-    # kucuk pasiflerin referansi ipege sigmiyor -> fabrikasyon katmanina (KiCad'de gorunur)
-    if re.match(r"(R|C|L|D)\d|RN|RS", p["ref"]) and not p["ref"].startswith("DS"):
+    # kucuk pasiflerin ve kenara sigmayanlarin referansi fabrikasyon katmanina
+    if re.match(r"(R|C|L|D)\d|RN|RS|MH|DS|J11$|J12$|LS1$|J2$|Q\d|U([2-35-7]|9|10)$", p["ref"]):
         ref.SetLayer(pcbnew.B_Fab if p["side"] == "B" else pcbnew.F_Fab)
+    FP_REF_AT[p["ref"]] = None
+    # footprint'in kendi "1" gibi ek ipek yazilari (LED pin-1) pedlerin ustune dusuyor
+    for g in list(fp.GraphicalItems()):
+        if g.GetClass() in ("FP_TEXT", "PCB_TEXT") and g.GetLayer() == pcbnew.F_SilkS \
+                and g.GetText() not in ("${REFERENCE}",):
+            g.SetVisible(False)
     FP[p["ref"]] = fp
+    # IC / transistor / XT60 referansi govdenin ortasina (pedsiz bolge)
+    if re.match(r"U([2-9]|10)$|Q\d|J2$|F1$", p["ref"]):
+        ref.SetPosition(fp.GetPosition() if p["ref"] != "J2" else V(p["x"], p["y"]))
+        ref.SetTextAngleDegrees(0)
+    if p["ref"] == "U1":                                   # modul ust kismi pedsiz
+        ref.SetPosition(V(p["x"], p["y"] + 8.6))
+        ref.SetTextAngleDegrees(0)
 
 # J1 yon kontrolu: pin 2 kenara (yukari), pin 3 saga
 _j1 = {q.GetNumber(): BXY(q.GetPosition()) for q in FP["J1"].Pads()}
@@ -215,7 +229,8 @@ def placement_check():
         if a.startswith("MH"):
             continue
         x1, y1, x2, y2 = boxes[a][0]
-        if x1 < -0.01 or y1 < -0.01 or x2 > D.BW + 0.01 or y2 > D.BH + 0.01:
+        if (x1 < -0.01 or y1 < -0.01 or x2 > D.BW + 0.01 or y2 > D.BH + 0.01) \
+                and a not in ("J11",):           # USB-C agzi kenardan bilerek tasar
             out.append(f"KART DISI {a} ({x1:.1f},{y1:.1f})-({x2:.1f},{y2:.1f})")
         if x2 > cu["x1"] and x1 < cu["x2"] and y1 < cu["depth"]:
             out.append(f"KESIT {a} ({x1:.1f},{y1:.1f})-({x2:.1f},{y2:.1f})")
@@ -316,12 +331,15 @@ def text(t, x, y, size=1.0, thick=0.15, layer=pcbnew.F_SilkS, left=True):
 for args in D.SILK:
     text(*args)
 # alt yuz: kart kimligi ve uyarilar (ust yuz kalabalik)
-for t, y, sz in (("T3-REDSTONE  rev B", 30.0, 2.2), ("ROS 2 robot kontrol karti / T3 Gemstone O1", 26.5, 1.0),
-                 ("2S LiPo 6.0-8.4V  -  ters baglama korumali", 24.5, 1.0),
-                 ("Acil stop NC: J12'ye buton ya da kopru takilmazsa motorlar calismaz", 22.5, 0.8),
-                 ("40-pin disi soket >= 16 mm (USB-A/RJ45 uzerinden gecer)", 20.8, 0.8),
-                 ("Bu yuze komponent KONMAZ (soket haric)", 19.1, 0.8)):
-    text(t, 8.0, y, sz, max(0.12, sz * 0.15), pcbnew.B_SilkS)
+# ESP32 modulunun alti: alt yuzde THT ped yok
+for t, y, sz in (("T3-REDSTONE rev B", 47.0, 1.6), ("ROS 2 kontrol karti", 45.0, 0.8),
+                 ("T3 Gemstone O1 / 2S LiPo 6-8.4V", 43.6, 0.7),
+                 ("J12 ACIL STOP (NC) - kopru yoksa motor yok", 41.6, 0.6),
+                 ("LS1 BUZZER 5V   J13 BUMPER", 40.4, 0.6),
+                 ("SW1 BOOT   SW2 RESET   J10 QWIIC", 39.2, 0.6),
+                 ("J14: 3V3 IO16 IO17 GND", 38.0, 0.6),
+                 ("40P soket >=16mm, bu yuze parca konmaz", 36.2, 0.6)):
+    text(t, 18.8, y, sz, max(0.1, sz * 0.15), pcbnew.B_SilkS, left=False)
 for nm, x1, y1, x2, y2 in D.TALL:                 # Gemstone'un yuksek bloklari (bilgi)
     for a, b in (((x1, y1), (x2, y1)), ((x2, y1), (x2, y2)), ((x2, y2), (x1, y2)), ((x1, y2), (x1, y1))):
         seg(a, b, pcbnew.Dwgs_User, 0.15)
@@ -353,7 +371,7 @@ pro = {
                          "copper_text_thickness": 0.3, "silk_line_width": 0.12,
                          "silk_text_size_h": 1.0, "silk_text_size_v": 1.0,
                          "silk_text_thickness": 0.15, "pads": {"drill": 1.0, "height": 1.7, "width": 1.7}},
-            "rules": {"min_clearance": 0.15, "min_track_width": 0.1,
+            "rules": {"min_clearance": 0.1, "min_track_width": 0.1,
                       "min_via_diameter": 0.45, "min_via_annular_width": 0.1,
                       "min_through_hole_diameter": 0.2, "min_hole_clearance": 0.15,
                       "min_hole_to_hole": 0.25, "min_copper_edge_clearance": 0.3,
@@ -361,7 +379,10 @@ pro = {
                       "min_text_thickness": 0.1, "min_microvia_diameter": 0.2,
                       "min_microvia_drill": 0.1, "solder_mask_clearance": 0.05,
                       "solder_mask_min_width": 0.0, "use_height_for_length_calcs": True,
-                      "allow_blind_buried_vias": False, "allow_microvias": False},
+                      "allow_blind_buried_vias": False, "allow_microvias": False,
+                      # header GND pinleri ic GND duzlemine dogrudan bagli; dis dokumde
+                      # tek termal kol yeterli
+                      "min_resolved_spokes": 1},
             "track_widths": [0.0, 0.2, 0.3, 0.5, 1.0, 1.5, 2.0],
             "via_dimensions": [{"diameter": 0.0, "drill": 0.0}, {"diameter": 0.5, "drill": 0.25},
                                {"diameter": 0.6, "drill": 0.3}, {"diameter": 0.8, "drill": 0.4}],

@@ -13,7 +13,7 @@ getiriyordu; bir kısmı parçaya ya da Gemstone'a zarar verebilirdi.
 | 3 | **DRV8874** (U2, U3) | Pinout uydurma: 2× VM, 2× PGND, 2× OUT varsayılmış. Şarj pompası (CPH/CPL/VCP) ve IMODE hiç yok | TI SLVSF66 pin tablosu; CPH–CPL 22 nF, VCP–VM 100 nF eklendi; PMODE = GND (PH/EN), IMODE = GND |
 | 4 | **Acil stop FET** (Q2) | P-FET ters: source motor tarafında, drain VSYS'te → gövde diyodu motoru **her zaman** besliyordu, acil stop hiçbir şeyi kesmiyordu | S = VSYS, D = VBAT_SW |
 | 5 | **Host UART** | Gemstone TXD (pin 8) ESP32'nin TX'ine (IO47) bağlı: TX ↔ TX çakışması | pin 8 → IO48 (ESP RX), pin 10 ← IO47 (ESP TX) |
-| 6 | **ESP32 pinleri** | Enkoder B1/A2/B2 yanlış pad'lerde; bumper IO36/IO37'de (PSRAM bölgesi, pin planı "KULLANMA" diyor); LED IO38'de; acil stop butonu IO39'da | Pin planına göre: enkoder 8/9/10/11, bumper 38/39, LED 40, acil stop 18, sürücü 21 |
+| 6 | **ESP32 pinleri** | Enkoder B1/A2/B2 yanlış pad'lerde; bumper IO36/IO37'de (PSRAM bölgesi, pin planı "KULLANMA" diyor); LED IO38'de; acil stop butonu IO39'da | Sinyaller kartın coğrafyasına göre yeniden atandı (sürücüler alt sıradan, enkoder/I2C sağdan, host solda) — [02-pin-plani.md](02-pin-plani.md) |
 | 7 | **Durum LED'leri** | WS2812B'lerin VDD ve GND pinleri **bağlı değildi**; 3.3 V veri 5 V LED'in eşiğinin altında | SK6812MINI ×4, +5V ve GND bağlı, her birine 100 nF, 74AHCT1G125 ile 3.3 → 5 V veri |
 | 8 | **5 V BEC** (U7) | FB bölücü 68k / 10k → **6.0 V** çıkış (AP2112K'nın girişi 6 V sınırında, enkoderler 5 V) | 56k / 10k → 5.07 V |
 | 9 | **Diyotlar** D1, D2 | SOD-123'te pad 1 = katot olduğu hesaba katılmamış: D1 BEC'in 5 V'unu USB portuna basıyordu; D2 buzzer açılınca 3V3'ü kısa devre ediyordu | Yönler düzeltildi |
